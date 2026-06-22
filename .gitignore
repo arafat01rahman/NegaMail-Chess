@@ -1,0 +1,8 @@
+# Compiled output
+engine
+*.o
+*.exe
+
+# IDE clutter
+.vscode/
+*.swp
