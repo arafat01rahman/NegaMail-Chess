@@ -2,8 +2,7 @@
 #include "board.h"
 #include "math.h"
 #include <vector>
-
-using namespace std;
+#include "MyStruct.h"
 
 int main()
 {
@@ -16,11 +15,16 @@ int main()
     std::cout << "Hello" << std::endl;
     std::cout << "adding 3+3 = " << add(3, 3) << std::endl;
     int x = 1;
-    cout << "incremented 1 = " << increment(x) << endl;
+    std::cout << "incremented 1 = " << increment(x) << std::endl;
     Point p1 = {1, 2};
     printPoint(p1);
 
-    vector<int> vec = {1, 2, 3, 4};
+    std::vector<int> vec = {1, 2, 3, 4};
     auto it = vec.begin() + 1;
-    cout << "Vector at index 0 = " << *it << endl;
+    std::cout << "Vector at index 0 = " << *it << std::endl;
+
+    MyStruct ms1 ;
+    ms1.Value = 33;
+    std:: cout << ms1.Value << std::endl;
+    ms1.show();
 }
