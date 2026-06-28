@@ -1,7 +1,7 @@
 #include "MyStruct.h"
 #include <iostream>
 
-void MyStruct::show()
+void MyStruct::show(        )
 {
     std::cout << "value " << Value << std::endl;
 }
