@@ -1,4 +1,10 @@
-engine:
-	g++ -g -std=c++17 -Wall main.cpp math.cpp board.cpp mystruct.cpp -o engine
+CXX = g++
+CXXFLAGS = -g -std=c++17 -Wall
+TARGET = engine
+SOURCES = main.cpp board.cpp
+
+$(TARGET): $(SOURCES)
+	$(CXX) $(CXXFLAGS) $(SOURCES) -o $(TARGET)
+
 clean:
-	rm -f engine
+	rm -f $(TARGET)
