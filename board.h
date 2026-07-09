@@ -26,5 +26,6 @@ int type_of(int piece);
 int color_of(int piece) ;
 bool is_on_board(int sq);
 void init_starting_position(Board &b);
+char piece_to_char(int piece);
 void print_board(Board & b);
 

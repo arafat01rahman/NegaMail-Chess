@@ -25,5 +25,7 @@ int main() {
     int Teste4 = e4rank << 4 | e4file ;
     std::cout <<"Square Number for e4 = " <<Teste4 << std::endl;
     init_starting_position(c);
+    // clear_board(c);
     print_board(c);
+    
 }
