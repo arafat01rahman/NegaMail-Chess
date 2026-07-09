@@ -17,12 +17,13 @@ int main() {
     }
     
     // Test the board
-    Board b;
+    Board b,c;
     clear_board(b);
     std::cout << "\nBoard[0] = " << b.squares[0] << " (should be 0)\n";
     // Determine the square index for e4 (rank=4, file=4)
     int e4rank = 3, e4file = 4;
     int Teste4 = e4rank << 4 | e4file ;
     std::cout <<"Square Number for e4 = " <<Teste4 << std::endl;
-    return 0;
+    init_starting_position(c);
+    print_board(c);
 }
