@@ -99,4 +99,7 @@ void print_board(Board &b)
     }
 }
 
-
+void print_move(const move & m)
+{
+    std::cout << "from " << m.from << " to "<< m.to << std::endl;
+}
