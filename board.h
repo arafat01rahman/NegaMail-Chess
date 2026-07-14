@@ -1,4 +1,5 @@
 #pragma once
+#include <vector>
 
 enum Piece
 {
@@ -40,7 +41,7 @@ struct move
 };
 
 const int knight_offset[8] = {-33, -31, -18, -14, 14, 18, 31, 33};
-const int king_offset[8] = {-1, -15, -17, 16, 1, 15, 16, 17};
+const int king_offset[8] = {-1, -15, -17, 1, 15, 16, 17};
 const int bishop_offset[8] = {-15, -17, 15, 17};
 const int rook_offset[8] = {-16, -1, 1, 16};
 const int queen_offset[8] = {-17, -16, -15, -1, 1, 15, 16, 17};
@@ -53,3 +54,4 @@ void init_starting_position(Board &b);
 char piece_to_char(int piece);
 void print_board(Board &b);
 void print_move(const move &m);
+void generate_pawn_moves(const Board &b, int color, std::vector<move> &moves);
