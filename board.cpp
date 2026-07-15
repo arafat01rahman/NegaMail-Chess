@@ -1,6 +1,5 @@
 #include "board.h"
-#include <iostream>
-#include <vector>
+
 
 int color_of(int piece)
 {
@@ -104,7 +103,7 @@ void print_board(Board &b)
     }
 }
 
-void print_move(const move &m)
+void print_move(const Move &m)
 {
     std::cout << "from " << m.from << " to " << m.to << std::endl;
 }
@@ -118,53 +117,83 @@ bool is_on_starting_rank(int from, int color)
     return false;
 }
 
-void generate_pawn_moves(const Board &b, int color, std::vector<move> &moves)
+void generate_pawn_moves(const Board &b, int color, std::vector<Move> &moves)
 {
-    int direction;
-    if (color == 1)
-    {
-        direction = 16;
-    }
-    else if (color == -1)
-    {
-        direction = -16;
-    }
-    else
-        return;
+    int direction = (color == 1) ? 16 : -16;
 
-    // iterating all 128 squares as a piece , if its of given color
-    //  then calculate direction
-    //  then , check if its on board and empty
-    //  -> if yes, then take note on that possible move.(push back)
     for (int from = 0; from < 128; from++)
     {
-        int piece = b.squares[from];
-        if (piece == color * W_PAWN)
+        if (b.squares[from] != color * W_PAWN)
+            continue;
+        // Single push
+        //  -> can be normal single push or a promotion
+        int to = from + direction;
+        if (b.squares[to] == EMPTY && is_on_board(to))
         {
-            // Single push
-            int to = from + direction;
-            if (is_on_board(to) && b.squares[to] == EMPTY)
+            if ((color == 1 && to >= 112 && to <= 119) || (color == -1 && to >= 0 && to <= 7)) // is promotable
             {
-                moves.push_back({from, to, 0, MOVE_NORMAL});
-
-                // Double push (ONLY for pawns, and ONLY if single push was possible)
-                if (is_on_starting_rank(from, color))
+                if (color == 1)
                 {
-                    int oneStep = from + direction;
-                    int twoStep = from + 2 * direction;
-                    if (is_on_board(twoStep) &&
-                        b.squares[oneStep] == EMPTY &&
-                        b.squares[twoStep] == EMPTY)
-                    {
-                        moves.push_back({from, twoStep, 0, MOVE_DOUBLE_PAWN_PUSH});
-                    }
+                    moves.push_back({from, to, W_KNIGHT, MOVE_PROMOTION});
+                    moves.push_back({from, to, W_BISHOP, MOVE_PROMOTION});
+                    moves.push_back({from, to, W_ROOK, MOVE_PROMOTION});
+                    moves.push_back({from, to, W_QUEEN, MOVE_PROMOTION});
+                }
+                else
+                {
+                    moves.push_back({from, to, B_KNIGHT, MOVE_PROMOTION});
+                    moves.push_back({from, to, B_BISHOP, MOVE_PROMOTION});
+                    moves.push_back({from, to, B_ROOK, MOVE_PROMOTION});
+                    moves.push_back({from, to, B_QUEEN, MOVE_PROMOTION});
                 }
             }
-            int capture_offsets[2] = {direction + 1, direction - 1};
-            for (int i = 0; i < 2; i++)
+            else
             {
-                int to = from + capture_offsets[i];
-                if (is_on_board(to) && b.squares[to] != EMPTY && color_of(b.squares[to]) != color)
+                moves.push_back({from, to, 0, MOVE_NORMAL});
+            }
+
+            // double push , because single push succeded
+            if (is_on_starting_rank(from, color))
+            {
+                int oneStep = from + direction;
+                int twoStep = from + 2 * direction;
+                if (is_on_board(twoStep) && b.squares[oneStep] == EMPTY && b.squares[twoStep] == EMPTY)
+                {
+                    moves.push_back({from, twoStep, 0, MOVE_DOUBLE_PAWN_PUSH});
+                }
+            }
+        }
+
+        // Now capturing ,
+        // 1. Capture with a promotion 2. Nomral capturing
+        int capture_offset[2] = {direction + 1, direction - 1};
+        for (int i = 0; i < 2; i++)
+        {
+            int to = from + capture_offset[i];
+
+            // Check: on board, has enemy piece
+            if (is_on_board(to) && b.squares[to] != EMPTY && color_of(b.squares[to]) != color)
+            {
+                // Check if promotion
+                if ((color == 1 && to >= 112 && to <= 119) || (color == -1 && to >= 0 && to <= 7))
+                {
+                    // Add promotion moves
+                    if (color == 1)
+                    {
+                        moves.push_back({from, to, W_KNIGHT, MOVE_PROMOTION});
+                        moves.push_back({from, to, W_BISHOP, MOVE_PROMOTION});
+                        moves.push_back({from, to, W_ROOK, MOVE_PROMOTION});
+                        moves.push_back({from, to, W_QUEEN, MOVE_PROMOTION});
+                    }
+                    else
+                    {
+                        moves.push_back({from, to, B_KNIGHT, MOVE_PROMOTION});
+                        moves.push_back({from, to, B_BISHOP, MOVE_PROMOTION});
+                        moves.push_back({from, to, B_ROOK, MOVE_PROMOTION});
+                        moves.push_back({from, to, B_QUEEN, MOVE_PROMOTION});
+                    }
+                }
+                else
                 {
                     moves.push_back({from, to, 0, MOVE_NORMAL});
                 }
@@ -172,3 +201,4 @@ void generate_pawn_moves(const Board &b, int color, std::vector<move> &moves)
         }
     }
 }
+

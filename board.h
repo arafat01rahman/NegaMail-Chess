@@ -1,5 +1,6 @@
 #pragma once
 #include <vector>
+#include <iostream>
 
 enum Piece
 {
@@ -32,7 +33,7 @@ enum MoveFlag
     MOVE_DOUBLE_PAWN_PUSH
 };
 
-struct move
+struct Move
 {
     int from;
     int to;
@@ -53,5 +54,5 @@ bool is_on_board(int sq);
 void init_starting_position(Board &b);
 char piece_to_char(int piece);
 void print_board(Board &b);
-void print_move(const move &m);
-void generate_pawn_moves(const Board &b, int color, std::vector<move> &moves);
+void print_move(const Move &m);
+void generate_pawn_moves(const Board &b, int color, std::vector<Move> &moves);
