@@ -160,6 +160,15 @@ void generate_pawn_moves(const Board &b, int color, std::vector<move> &moves)
                     }
                 }
             }
+            int capture_offsets[2] = {direction + 1, direction - 1};
+            for (int i = 0; i < 2; i++)
+            {
+                int to = from + capture_offsets[i];
+                if (is_on_board(to) && b.squares[to] != EMPTY && color_of(b.squares[to]) != color)
+                {
+                    moves.push_back({from, to, 0, MOVE_NORMAL});
+                }
+            }
         }
     }
 }
