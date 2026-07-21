@@ -56,3 +56,4 @@ char piece_to_char(int piece);
 void print_board(Board &b);
 void print_move(const Move &m);
 void generate_pawn_moves(const Board &b, int color, std::vector<Move> &moves);
+void generate_knight_moves(const Board &b , int from ,int color ,std::vector<Move> &moves);

@@ -202,3 +202,14 @@ void generate_pawn_moves(const Board &b, int color, std::vector<Move> &moves)
     }
 }
 
+void generate_knight_moves(const Board &b , int from ,int color ,std::vector<Move> &moves)
+{
+    for(int i = 0 ; i < 8 ; i++)
+    {
+        int to  = from + knight_offset[i];
+        if(is_on_board(to) && (b.squares[to] == EMPTY || color_of(b.squares[to]) != color))
+        {
+            moves.push_back({from, to , 0, MOVE_NORMAL});
+        }
+    }
+}

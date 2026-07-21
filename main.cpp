@@ -2,7 +2,6 @@
 #include "board.h"
 #include <vector>
 
-
 int main()
 {
     //  Print all valid 0x88 squares
@@ -30,11 +29,10 @@ int main()
     init_starting_position(c);
     // clear_board(c);
     print_board(c);
-    std::vector<move> moves;
-    generate_pawn_moves(c, 1, moves); // White pawns
-
-    std::cout << "White pawn moves: " << moves.size() << std::endl;
-    for (const auto &m : moves)
+    std::vector<Move> knight_moves;
+    generate_knight_moves(c, 1, 1, knight_moves); 
+    std::cout << "Knight moves: " << knight_moves.size() << std::endl;
+    for (const auto &m : knight_moves)
     {
         print_move(m);
     }
