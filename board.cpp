@@ -1,5 +1,6 @@
 #include "board.h"
-
+#include <iostream>
+#include <vector>
 
 int color_of(int piece)
 {
@@ -35,6 +36,8 @@ bool is_on_board(int sq)
 void init_starting_position(Board &b)
 {
     clear_board(b);
+    b.en_passant_square = -1;
+    b.castling_rights = 1 | 2 | 4 | 8; // All rights initially
 
     int starting[8][8] = {
         {W_ROOK, W_KNIGHT, W_BISHOP, W_QUEEN, W_KING, W_BISHOP, W_KNIGHT, W_ROOK},
@@ -197,31 +200,132 @@ void generate_pawn_moves(const Board &b, int color, std::vector<Move> &moves)
                 {
                     moves.push_back({from, to, 0, MOVE_NORMAL});
                 }
+                // En passant capture
+                if (to == b.en_passant_square)
+                {
+                    moves.push_back({from, to, 0, MOVE_ENPASSANT});
+                }
             }
         }
     }
 }
 
-void generate_knight_moves(const Board &b , int from ,int color ,std::vector<Move> &moves)
+void generate_knight_moves(const Board &b, int from, int color, std::vector<Move> &moves)
 {
-    for(int i = 0 ; i < 8 ; i++)
+    for (int i = 0; i < 8; i++)
     {
-        int to  = from + knight_offset[i];
-        if(is_on_board(to) && (b.squares[to] == EMPTY || color_of(b.squares[to]) != color))
+        int to = from + knight_offset[i];
+        if (is_on_board(to) && (b.squares[to] == EMPTY || color_of(b.squares[to]) != color))
         {
-            moves.push_back({from, to , 0, MOVE_NORMAL});
+            moves.push_back({from, to, 0, MOVE_NORMAL});
         }
     }
 }
 
-void generate_king_moves(const Board &b , int from , int color, std::vector<Move> &moves)
+void generate_king_moves(const Board &b, int from, int color, std::vector<Move> &moves)
 {
-    for(int i  = 0 ; i < 8 ; i++)
+    for (int i = 0; i < 8; i++)
     {
         int to = from + king_offset[i];
-        if(is_on_board(to) && ((color_of(b.squares[to]) != color) || b.squares[to] == EMPTY ))
+        if (is_on_board(to) && ((color_of(b.squares[to]) != color) || b.squares[to] == EMPTY))
         {
-            moves.push_back({from , to , 0 , MOVE_NORMAL});
+            moves.push_back({from, to, 0, MOVE_NORMAL});
+        }
+    }
+}
+
+void generate_slider_moves(const Board &b, int from, int color, const int *offsets, int dir_offsets, std::vector<Move> &moves)
+{
+    for (int i = 0; i < dir_offsets; i++)
+    {
+        int to = from + offsets[i];
+        while (is_on_board(to))
+        {
+            if (b.squares[to] == EMPTY)
+            {
+                moves.push_back({from, to, 0, MOVE_NORMAL});
+            }
+            else
+            {
+                if (color_of(b.squares[to]) != color)
+                {
+                    moves.push_back({from, to, 0, MOVE_NORMAL});
+                }
+                break;
+            }
+            to += offsets[i];
+        }
+    }
+}
+
+void generate_moves(const Board &b, int color, std::vector<Move> &moves)
+{
+    moves.clear();
+
+    for (int from = 0; from < 128; from++)
+    {
+        int piece = b.squares[from];
+        if (piece == EMPTY || color_of(piece) != color)
+            continue;
+
+        int piece_type = type_of(piece);
+
+        switch (piece_type)
+        {
+        case W_PAWN:
+            generate_pawn_moves(b, color, moves);
+            break;
+        case W_KNIGHT:
+            generate_knight_moves(b, from, color, moves);
+            break;
+        case W_BISHOP:
+            generate_slider_moves(b, from, color, bishop_offset, 4, moves);
+            break;
+        case W_ROOK:
+            generate_slider_moves(b, from, color, rook_offset, 4, moves);
+            break;
+        case W_QUEEN:
+            generate_slider_moves(b, from, color, queen_offset, 8, moves);
+            break;
+        case W_KING:
+            generate_king_moves(b, from, color, moves);
+
+            if (color == 1 && from == 4)
+            {
+                if (b.castling_rights & 1)
+                {
+                    if (b.squares[5] == EMPTY && b.squares[6] == EMPTY && b.squares[7] == W_ROOK)
+                    {
+                        moves.push_back({4, 6, 0, MOVE_CASTLING});
+                    }
+                }
+                if (b.castling_rights & 2)
+                {
+                    if (b.squares[3] == EMPTY && b.squares[2] == EMPTY && b.squares[1] == EMPTY && b.squares[0] == W_ROOK)
+                    {
+                        moves.push_back({4, 2, 0, MOVE_CASTLING});
+                    }
+                }
+            }
+
+            if (color == -1 && from == 116)
+            {
+                if (b.castling_rights & 4)
+                {
+                    if (b.squares[117] == EMPTY && b.squares[118] == EMPTY && b.squares[119] == B_ROOK)
+                    {
+                        moves.push_back({116, 118, 0, MOVE_CASTLING});
+                    }
+                }
+                if (b.castling_rights & 8)
+                {
+                    if (b.squares[115] == EMPTY && b.squares[114] == EMPTY && b.squares[113] == EMPTY && b.squares[112] == B_ROOK)
+                    {
+                        moves.push_back({116, 112, 0, MOVE_CASTLING});
+                    }
+                }
+            }
+            break;
         }
     }
 }

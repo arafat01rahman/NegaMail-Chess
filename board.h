@@ -22,6 +22,8 @@ enum Piece
 struct Board
 {
     int squares[128];
+    int en_passant_square;
+    int castling_rights;
 };
 
 enum MoveFlag
@@ -56,5 +58,7 @@ char piece_to_char(int piece);
 void print_board(Board &b);
 void print_move(const Move &m);
 void generate_pawn_moves(const Board &b, int color, std::vector<Move> &moves);
-void generate_knight_moves(const Board &b , int from ,int color ,std::vector<Move> &moves);
-void generate_king_moves(const Board &b , int from , int color, std::vector<Move> &moves);
+void generate_knight_moves(const Board &b, int from, int color, std::vector<Move> &moves);
+void generate_king_moves(const Board &b, int from, int color, std::vector<Move> &moves);
+void generate_slider_moves(const Board &b, int from, int color, const int *offsets, int dir_offsets, std::vector<Move> &moves);
+void generate_moves(const Board &b, int color, std::vector<Move> &moves);

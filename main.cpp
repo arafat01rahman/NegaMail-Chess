@@ -30,9 +30,22 @@ int main()
     // clear_board(c);
     print_board(c);
     std::vector<Move> knight_moves;
-    generate_knight_moves(c, 1, 1, knight_moves); 
+    generate_knight_moves(c, 1, 1, knight_moves);
     std::cout << "Knight moves: " << knight_moves.size() << std::endl;
     for (const auto &m : knight_moves)
+    {
+        print_move(m);
+    }
+
+    Board f;
+    init_starting_position(f);
+    print_board(f);
+
+    std::vector<Move> moves;
+    generate_moves(f, 1, moves); // White moves
+
+    std::cout << "White moves: " << moves.size() << std::endl;
+    for (const auto &m : moves)
     {
         print_move(m);
     }
