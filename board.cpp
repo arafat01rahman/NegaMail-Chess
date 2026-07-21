@@ -213,3 +213,15 @@ void generate_knight_moves(const Board &b , int from ,int color ,std::vector<Mov
         }
     }
 }
+
+void generate_king_moves(const Board &b , int from , int color, std::vector<Move> &moves)
+{
+    for(int i  = 0 ; i < 8 ; i++)
+    {
+        int to = from + king_offset[i];
+        if(is_on_board(to) && ((color_of(b.squares[to]) != color) || b.squares[to] == EMPTY ))
+        {
+            moves.push_back({from , to , 0 , MOVE_NORMAL});
+        }
+    }
+}
