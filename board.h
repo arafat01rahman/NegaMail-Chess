@@ -24,6 +24,7 @@ struct Board
     int squares[128];
     int en_passant_square;
     int castling_rights;
+    int side_to_move;
 };
 
 enum MoveFlag
@@ -42,6 +43,16 @@ struct Move
     int promotion;
     MoveFlag flag;
 };
+
+struct UndoInfo
+{
+    int captured_piece;
+    int captured_square;
+    int castling_rights;
+    int en_passant_square;
+    int side_to_move;
+};
+
 
 const int knight_offset[8] = {-33, -31, -18, -14, 14, 18, 31, 33};
 const int king_offset[8] = {-1, -15, -17, 1, 15, 16, 17};
@@ -62,3 +73,6 @@ void generate_knight_moves(const Board &b, int from, int color, std::vector<Move
 void generate_king_moves(const Board &b, int from, int color, std::vector<Move> &moves);
 void generate_slider_moves(const Board &b, int from, int color, const int *offsets, int dir_offsets, std::vector<Move> &moves);
 void generate_moves(const Board &b, int color, std::vector<Move> &moves);
+UndoInfo save_state(const Board &b);
+UndoInfo make_move(Board &b, const Move &m);
+void unmake_move(Board &b, const Move &m, const UndoInfo &u);

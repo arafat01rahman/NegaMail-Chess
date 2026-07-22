@@ -26,6 +26,9 @@ void clear_board(Board &b)
     {
         b.squares[i] = 0;
     }
+    b.en_passant_square = -1;
+    b.castling_rights = 0;
+    b.side_to_move = 0;
 }
 
 bool is_on_board(int sq)
@@ -38,6 +41,7 @@ void init_starting_position(Board &b)
     clear_board(b);
     b.en_passant_square = -1;
     b.castling_rights = 1 | 2 | 4 | 8; // All rights initially
+    b.side_to_move = 0;
 
     int starting[8][8] = {
         {W_ROOK, W_KNIGHT, W_BISHOP, W_QUEEN, W_KING, W_BISHOP, W_KNIGHT, W_ROOK},
@@ -328,4 +332,61 @@ void generate_moves(const Board &b, int color, std::vector<Move> &moves)
             break;
         }
     }
+}
+
+UndoInfo save_state(const Board &b)
+{
+    UndoInfo u;
+    u.captured_piece = 0;
+    u.captured_square = 0;
+    u.en_passant_square = b.en_passant_square;
+    u.castling_rights = b.castling_rights;
+    u.side_to_move = b.side_to_move;
+
+    return u;
+}
+
+UndoInfo make_move(Board &b, const Move &m)
+{
+    // 1. Save state
+    UndoInfo u = save_state(b);
+
+    // 2. Store captured piece (BEFORE moving)
+    u.captured_piece = b.squares[m.to];
+    u.captured_square = m.to;
+
+    // 3. Get piece and color BEFORE moving
+    int piece = b.squares[m.from];
+    int color = color_of(piece);
+
+    // 4. Move the piece
+    b.squares[m.to] = piece;
+    b.squares[m.from] = EMPTY;
+
+    // 5. Update en passant square
+    b.en_passant_square = -1; // Default
+    if (m.flag == MOVE_DOUBLE_PAWN_PUSH)
+    {
+        int direction = (color == 1) ? 16 : -16;
+        b.en_passant_square = m.from + direction;
+    }
+
+    // 6. Toggle side to move
+    b.side_to_move ^= 1;
+
+    return u;
+}
+
+void unmake_move(Board &b, const Move &m, const UndoInfo &u)
+{
+    // 1. Move the piece back from 'to' to 'from'
+    b.squares[m.from] = b.squares[m.to];
+    
+    // 2. Restore the captured piece to 'to'
+    b.squares[m.to] = u.captured_piece;
+    
+    // 3. Restore state variables
+    b.en_passant_square = u.en_passant_square;
+    b.castling_rights = u.castling_rights;
+    b.side_to_move = u.side_to_move;
 }
