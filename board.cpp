@@ -266,6 +266,10 @@ void generate_moves(const Board &b, int color, std::vector<Move> &moves)
 {
     moves.clear();
 
+    // Generate pawn moves once (they handle all pawns internally)
+    generate_pawn_moves(b, color, moves);
+
+    // Generate moves for all other pieces
     for (int from = 0; from < 128; from++)
     {
         int piece = b.squares[from];
@@ -276,9 +280,6 @@ void generate_moves(const Board &b, int color, std::vector<Move> &moves)
 
         switch (piece_type)
         {
-        case W_PAWN:
-            generate_pawn_moves(b, color, moves);
-            break;
         case W_KNIGHT:
             generate_knight_moves(b, from, color, moves);
             break;
@@ -294,6 +295,7 @@ void generate_moves(const Board &b, int color, std::vector<Move> &moves)
         case W_KING:
             generate_king_moves(b, from, color, moves);
 
+            // White castling
             if (color == 1 && from == 4)
             {
                 if (b.castling_rights & 1)
@@ -312,6 +314,7 @@ void generate_moves(const Board &b, int color, std::vector<Move> &moves)
                 }
             }
 
+            // Black castling
             if (color == -1 && from == 116)
             {
                 if (b.castling_rights & 4)
@@ -564,5 +567,22 @@ bool is_in_check(const Board &b, int color)
     int king = find_king(b, color);
     if (king == -1)
         return false;
-    return is_square_attacked(b, king, color);
+    return is_square_attacked(b, king, -color);
+}
+
+void generate_legal_moves(Board &b, int color, std::vector<Move> &moves)
+{
+    moves.clear();
+    std::vector<Move> pseudo_moves;
+    generate_moves(b, color, pseudo_moves);
+    for (const Move &m : pseudo_moves)
+    {
+        UndoInfo u = make_move(b, m);
+        if (!is_in_check(b, color))
+        {
+            // keep the move
+            moves.push_back(m);
+        }
+        unmake_move(b, m, u);
+    }
 }

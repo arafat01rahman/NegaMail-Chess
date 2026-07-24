@@ -76,3 +76,9 @@ void generate_moves(const Board &b, int color, std::vector<Move> &moves);
 UndoInfo save_state(const Board &b);
 UndoInfo make_move(Board &b, const Move &m);
 void unmake_move(Board &b, const Move &m, const UndoInfo &u);
+bool is_square_attacked(const Board &b, int square, int attacker_color);
+int find_king(const Board &b, int color);
+bool is_in_check(const Board &b, int color);
+void generate_legal_moves(Board &b, int color, std::vector<Move> &moves);
+
+
