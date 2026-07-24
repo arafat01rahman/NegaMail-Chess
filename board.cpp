@@ -379,14 +379,67 @@ UndoInfo make_move(Board &b, const Move &m)
 
 void unmake_move(Board &b, const Move &m, const UndoInfo &u)
 {
-    // 1. Move the piece back from 'to' to 'from'
-    b.squares[m.from] = b.squares[m.to];
+    // Handle en passant
+    if (m.flag == MOVE_ENPASSANT)
+    {
+        b.squares[u.captured_square] = u.captured_piece;
+        b.squares[m.from] = b.squares[m.to];
+        b.squares[m.to] = EMPTY;
+        
+        b.en_passant_square = u.en_passant_square;
+        b.castling_rights = u.castling_rights;
+        b.side_to_move = u.side_to_move;
+        return;
+    }
     
-    // 2. Restore the captured piece to 'to'
+    // 3.3.6: Handle castling FIRST (before normal unmake)
+    if (m.flag == MOVE_CASTLING)
+    {
+        // Move the king back
+        b.squares[m.from] = b.squares[m.to];
+        b.squares[m.to] = u.captured_piece;
+        
+        // Move the rook back
+        if (m.to == 6)  // White kingside: king e1→g1, rook h1→f1
+        {
+            b.squares[7] = W_ROOK;   // Restore rook to h1
+            b.squares[5] = EMPTY;    // Clear f1
+        }
+        else if (m.to == 2)  // White queenside: king e1→c1, rook a1→d1
+        {
+            b.squares[0] = W_ROOK;   // Restore rook to a1
+            b.squares[3] = EMPTY;    // Clear d1
+        }
+        else if (m.to == 118)  // Black kingside: king e8→g8, rook h8→f8
+        {
+            b.squares[119] = B_ROOK; // Restore rook to h8
+            b.squares[117] = EMPTY;  // Clear f8
+        }
+        else if (m.to == 112)  // Black queenside: king e8→c8, rook a8→d8
+        {
+            b.squares[112] = B_ROOK; // Restore rook to a8
+            b.squares[115] = EMPTY;  // Clear d8
+        }
+        
+        // Restore state
+        b.en_passant_square = u.en_passant_square;
+        b.castling_rights = u.castling_rights;
+        b.side_to_move = u.side_to_move;
+        return;
+    }
+    
+    // Normal unmake (for non-special moves)
+    b.squares[m.from] = b.squares[m.to];
     b.squares[m.to] = u.captured_piece;
     
-    // 3. Restore state variables
+    if (m.flag == MOVE_PROMOTION)
+    {
+        int color = (b.squares[m.from] > 0) ? 1 : -1;
+        b.squares[m.from] = color * W_PAWN;
+    }
+    
     b.en_passant_square = u.en_passant_square;
     b.castling_rights = u.castling_rights;
     b.side_to_move = u.side_to_move;
 }
+
