@@ -385,61 +385,164 @@ void unmake_move(Board &b, const Move &m, const UndoInfo &u)
         b.squares[u.captured_square] = u.captured_piece;
         b.squares[m.from] = b.squares[m.to];
         b.squares[m.to] = EMPTY;
-        
+
         b.en_passant_square = u.en_passant_square;
         b.castling_rights = u.castling_rights;
         b.side_to_move = u.side_to_move;
         return;
     }
-    
+
     // 3.3.6: Handle castling FIRST (before normal unmake)
     if (m.flag == MOVE_CASTLING)
     {
         // Move the king back
         b.squares[m.from] = b.squares[m.to];
         b.squares[m.to] = u.captured_piece;
-        
+
         // Move the rook back
-        if (m.to == 6)  // White kingside: king e1→g1, rook h1→f1
+        if (m.to == 6) // White kingside: king e1→g1, rook h1→f1
         {
-            b.squares[7] = W_ROOK;   // Restore rook to h1
-            b.squares[5] = EMPTY;    // Clear f1
+            b.squares[7] = W_ROOK; // Restore rook to h1
+            b.squares[5] = EMPTY;  // Clear f1
         }
-        else if (m.to == 2)  // White queenside: king e1→c1, rook a1→d1
+        else if (m.to == 2) // White queenside: king e1→c1, rook a1→d1
         {
-            b.squares[0] = W_ROOK;   // Restore rook to a1
-            b.squares[3] = EMPTY;    // Clear d1
+            b.squares[0] = W_ROOK; // Restore rook to a1
+            b.squares[3] = EMPTY;  // Clear d1
         }
-        else if (m.to == 118)  // Black kingside: king e8→g8, rook h8→f8
+        else if (m.to == 118) // Black kingside: king e8→g8, rook h8→f8
         {
             b.squares[119] = B_ROOK; // Restore rook to h8
             b.squares[117] = EMPTY;  // Clear f8
         }
-        else if (m.to == 112)  // Black queenside: king e8→c8, rook a8→d8
+        else if (m.to == 112) // Black queenside: king e8→c8, rook a8→d8
         {
             b.squares[112] = B_ROOK; // Restore rook to a8
             b.squares[115] = EMPTY;  // Clear d8
         }
-        
+
         // Restore state
         b.en_passant_square = u.en_passant_square;
         b.castling_rights = u.castling_rights;
         b.side_to_move = u.side_to_move;
         return;
     }
-    
+
     // Normal unmake (for non-special moves)
     b.squares[m.from] = b.squares[m.to];
     b.squares[m.to] = u.captured_piece;
-    
+
     if (m.flag == MOVE_PROMOTION)
     {
         int color = (b.squares[m.from] > 0) ? 1 : -1;
         b.squares[m.from] = color * W_PAWN;
     }
-    
+
     b.en_passant_square = u.en_passant_square;
     b.castling_rights = u.castling_rights;
     b.side_to_move = u.side_to_move;
 }
 
+bool is_square_attacked(const Board &b, int square, int attacker_color)
+{
+    // check if any knights are on the way to
+    for (int i = 0; i < 8; i++)
+    {
+        int from = square + knight_offset[i];
+        if (is_on_board(from))
+        {
+            int piece = b.squares[from];
+            if (piece != EMPTY && type_of(piece) == W_KNIGHT && color_of(piece) == attacker_color)
+            {
+                return true;
+            }
+        }
+    }
+    // Pawn attacks checking on a squrare
+    if (attacker_color == 1) // W_pawns attacks upward
+    {
+        int from1 = square - 15;
+        int from2 = square - 17;
+        if (is_on_board(from1) && b.squares[from1] == W_PAWN)
+            return true;
+        if (is_on_board(from2) && b.squares[from2] == W_PAWN)
+            return true;
+    }
+    if (attacker_color == -1) // B_pawns attack downwards
+    {
+        int from1 = square + 15;
+        int from2 = square + 17;
+        if (is_on_board(from1) && b.squares[from1] == B_PAWN)
+            return true;
+        if (is_on_board(from2) && b.squares[from2] == B_PAWN)
+            return true;
+    }
+
+    // attack by king check
+
+    if (attacker_color == 1) // W_king will be attacking
+    {
+        for (int i = 0; i < 8; i++)
+        {
+            int from = square + king_offset[i];
+            if (is_on_board(from) && b.squares[from] == W_KING)
+            {
+                return true;
+            }
+        }
+    }
+    if (attacker_color == -1) // B_king will be attacking
+    {
+        for (int i = 0; i < 8; i++)
+        {
+            int from = square + king_offset[i];
+            if (is_on_board(from) && b.squares[from] == B_KING)
+            {
+                return true;
+            }
+        }
+    }
+
+    // Slider attacks (attacks by queen , rooks and bishop)
+    //
+    // Bishop + queen
+    for (int i = 0; i < 4; i++)
+    {
+        int from = square + bishop_offset[i];
+        while (is_on_board(from))
+        {
+            int piece = b.squares[from];
+            if (piece != EMPTY)
+            {
+                if (color_of(piece) == attacker_color &&
+                    (type_of(piece) == W_BISHOP || type_of(piece) == W_QUEEN))
+                {
+                    return true;
+                }
+                break; // Any piece blocks further
+            }
+            from += bishop_offset[i];
+        }
+    }
+
+    // Rook + queen
+    for (int i = 0; i < 4; i++)
+    {
+        int from = square + rook_offset[i];
+        while (is_on_board(from))
+        {
+            int piece = b.squares[from];
+            if (piece != EMPTY)
+            {
+                if (color_of(piece) == attacker_color &&
+                    (type_of(piece) == W_ROOK || type_of(piece) == W_QUEEN))
+                {
+                    return true;
+                }
+                break;
+            }
+            from += rook_offset[i];
+        }
+    }
+    return false;
+}
