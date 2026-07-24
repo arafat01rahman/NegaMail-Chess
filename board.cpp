@@ -546,3 +546,23 @@ bool is_square_attacked(const Board &b, int square, int attacker_color)
     }
     return false;
 }
+
+int find_king(const Board &b, int color)
+{
+    for (int i = 0; i < 128; i++)
+    {
+        if (b.squares[i] == color * W_KING)
+        {
+            return i;
+        }
+    }
+    return -1;
+}
+
+bool is_in_check(const Board &b, int color)
+{
+    int king = find_king(b, color);
+    if (king == -1)
+        return false;
+    return is_square_attacked(b, king, color);
+}
