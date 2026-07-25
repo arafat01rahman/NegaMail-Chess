@@ -1,6 +1,8 @@
 #pragma once
 #include <vector>
 #include <iostream>
+#include <cstdint>
+
 
 enum Piece
 {
@@ -55,7 +57,7 @@ struct UndoInfo
 
 
 const int knight_offset[8] = {-33, -31, -18, -14, 14, 18, 31, 33};
-const int king_offset[8] = {-1, -15, -17, 1, 15, 16, 17};
+const int king_offset[8] = {-17, -16, -15, -1, 1, 15, 16, 17};
 const int bishop_offset[8] = {-15, -17, 15, 17};
 const int rook_offset[8] = {-16, -1, 1, 16};
 const int queen_offset[8] = {-17, -16, -15, -1, 1, 15, 16, 17};
@@ -80,5 +82,6 @@ bool is_square_attacked(const Board &b, int square, int attacker_color);
 int find_king(const Board &b, int color);
 bool is_in_check(const Board &b, int color);
 void generate_legal_moves(Board &b, int color, std::vector<Move> &moves);
+uint64_t perft(Board &b, int depth);
 
 

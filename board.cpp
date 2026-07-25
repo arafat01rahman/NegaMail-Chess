@@ -1,6 +1,7 @@
 #include "board.h"
 #include <iostream>
 #include <vector>
+#include <cstdint>
 
 int color_of(int piece)
 {
@@ -28,7 +29,7 @@ void clear_board(Board &b)
     }
     b.en_passant_square = -1;
     b.castling_rights = 0;
-    b.side_to_move = 0;
+    b.side_to_move = 1;
 }
 
 bool is_on_board(int sq)
@@ -41,7 +42,7 @@ void init_starting_position(Board &b)
     clear_board(b);
     b.en_passant_square = -1;
     b.castling_rights = 1 | 2 | 4 | 8; // All rights initially
-    b.side_to_move = 0;
+    b.side_to_move = 1;
 
     int starting[8][8] = {
         {W_ROOK, W_KNIGHT, W_BISHOP, W_QUEEN, W_KING, W_BISHOP, W_KNIGHT, W_ROOK},
@@ -204,13 +205,29 @@ void generate_pawn_moves(const Board &b, int color, std::vector<Move> &moves)
                 {
                     moves.push_back({from, to, 0, MOVE_NORMAL});
                 }
-                // En passant capture
-                if (to == b.en_passant_square)
+                // En passant capture  (this block was misplaced; we move it outside)
+            }
+        }
+
+        // -------- ADDED: En passant captures --------
+        if (b.en_passant_square != -1)
+        {
+            int to = b.en_passant_square;
+            // Pawn moves diagonally: difference ±15 or ±17
+            int diff = to - from;
+            if ((diff == 15 || diff == -15 || diff == 17 || diff == -17) &&
+                is_on_board(to))
+            {
+                // Ensure pawn is on correct rank for en passant
+                // White pawns: rank 5 (squares 64..71), Black pawns: rank 4 (squares 48..55)
+                if ((color == 1 && (from >= 64 && from <= 71)) ||
+                    (color == -1 && (from >= 48 && from <= 55)))
                 {
                     moves.push_back({from, to, 0, MOVE_ENPASSANT});
                 }
             }
         }
+        // --------------------------------------------
     }
 }
 
@@ -300,14 +317,16 @@ void generate_moves(const Board &b, int color, std::vector<Move> &moves)
             {
                 if (b.castling_rights & 1)
                 {
-                    if (b.squares[5] == EMPTY && b.squares[6] == EMPTY && b.squares[7] == W_ROOK)
+                    if (b.squares[5] == EMPTY && b.squares[6] == EMPTY && b.squares[7] == W_ROOK &&
+                        !is_square_attacked(b, 4, -1) && !is_square_attacked(b, 5, -1) && !is_square_attacked(b, 6, -1))
                     {
                         moves.push_back({4, 6, 0, MOVE_CASTLING});
                     }
                 }
                 if (b.castling_rights & 2)
                 {
-                    if (b.squares[3] == EMPTY && b.squares[2] == EMPTY && b.squares[1] == EMPTY && b.squares[0] == W_ROOK)
+                    if (b.squares[3] == EMPTY && b.squares[2] == EMPTY && b.squares[1] == EMPTY && b.squares[0] == W_ROOK &&
+                        !is_square_attacked(b, 4, -1) && !is_square_attacked(b, 3, -1) && !is_square_attacked(b, 2, -1))
                     {
                         moves.push_back({4, 2, 0, MOVE_CASTLING});
                     }
@@ -319,16 +338,19 @@ void generate_moves(const Board &b, int color, std::vector<Move> &moves)
             {
                 if (b.castling_rights & 4)
                 {
-                    if (b.squares[117] == EMPTY && b.squares[118] == EMPTY && b.squares[119] == B_ROOK)
+                    if (b.squares[117] == EMPTY && b.squares[118] == EMPTY && b.squares[119] == B_ROOK &&
+                        !is_square_attacked(b, 116, 1) && !is_square_attacked(b, 117, 1) && !is_square_attacked(b, 118, 1))
                     {
                         moves.push_back({116, 118, 0, MOVE_CASTLING});
                     }
                 }
                 if (b.castling_rights & 8)
                 {
-                    if (b.squares[115] == EMPTY && b.squares[114] == EMPTY && b.squares[113] == EMPTY && b.squares[112] == B_ROOK)
+                    // Queenside: destination is c8 (114), NOT a8 (112)
+                    if (b.squares[115] == EMPTY && b.squares[114] == EMPTY && b.squares[113] == EMPTY && b.squares[112] == B_ROOK &&
+                        !is_square_attacked(b, 116, 1) && !is_square_attacked(b, 115, 1) && !is_square_attacked(b, 114, 1))
                     {
-                        moves.push_back({116, 112, 0, MOVE_CASTLING});
+                        moves.push_back({116, 114, 0, MOVE_CASTLING});
                     }
                 }
             }
@@ -366,20 +388,83 @@ UndoInfo make_move(Board &b, const Move &m)
     b.squares[m.to] = piece;
     b.squares[m.from] = EMPTY;
 
-    // 5. Update en passant square
-    b.en_passant_square = -1; // Default
+    // 4.5. Revoke castling rights if king or rook moved, or rook was captured
+    if (type_of(piece) == W_KING)
+    {
+        if (color == 1)
+            b.castling_rights &= ~(1 | 2);
+        else
+            b.castling_rights &= ~(4 | 8);
+    }
+    if (m.from == 0)
+        b.castling_rights &= ~2;
+    if (m.from == 7)
+        b.castling_rights &= ~1;
+    if (m.from == 112)
+        b.castling_rights &= ~8;
+    if (m.from == 119)
+        b.castling_rights &= ~4;
+
+    if (u.captured_square == 0)
+        b.castling_rights &= ~2;
+    if (u.captured_square == 7)
+        b.castling_rights &= ~1;
+    if (u.captured_square == 112)
+        b.castling_rights &= ~8;
+    if (u.captured_square == 119)
+        b.castling_rights &= ~4;
+
+    // 5. Handle special moves
+    if (m.flag == MOVE_PROMOTION)
+    {
+        // Replace pawn with promoted piece
+        b.squares[m.to] = m.promotion;
+    }
+    else if (m.flag == MOVE_ENPASSANT)
+    {
+        // Remove the captured pawn from the en passant square
+        int captured_sq = m.to + ((color == 1) ? -16 : 16);
+        u.captured_piece = b.squares[captured_sq];
+        u.captured_square = captured_sq;
+        b.squares[captured_sq] = EMPTY;
+    }
+    else if (m.flag == MOVE_CASTLING)
+    {
+        // Move the rook
+        if (m.to == 6) // White kingside: king e1→g1, rook h1→f1
+        {
+            b.squares[5] = W_ROOK; // Rook to f1
+            b.squares[7] = EMPTY;  // Clear h1
+        }
+        else if (m.to == 2) // White queenside: king e1→c1, rook a1→d1
+        {
+            b.squares[3] = W_ROOK; // Rook to d1
+            b.squares[0] = EMPTY;  // Clear a1
+        }
+        else if (m.to == 118) // Black kingside: king e8→g8, rook h8→f8
+        {
+            b.squares[117] = B_ROOK; // Rook to f8
+            b.squares[119] = EMPTY;  // Clear h8
+        }
+        else if (m.to == 114) // Black queenside: king e8→c8, rook a8→d8   (changed from 112 to 114)
+        {
+            b.squares[115] = B_ROOK; // Rook to d8
+            b.squares[112] = EMPTY;  // Clear a8
+        }
+    }
+
+    // 6. Update en passant square
+    b.en_passant_square = -1;
     if (m.flag == MOVE_DOUBLE_PAWN_PUSH)
     {
         int direction = (color == 1) ? 16 : -16;
         b.en_passant_square = m.from + direction;
     }
 
-    // 6. Toggle side to move
-    b.side_to_move ^= 1;
-
+    // 7. Toggle side to move
+    b.side_to_move = -b.side_to_move;
     return u;
-}
-
+}   
 void unmake_move(Board &b, const Move &m, const UndoInfo &u)
 {
     // Handle en passant
@@ -395,7 +480,7 @@ void unmake_move(Board &b, const Move &m, const UndoInfo &u)
         return;
     }
 
-    // 3.3.6: Handle castling FIRST (before normal unmake)
+    // Handle castling
     if (m.flag == MOVE_CASTLING)
     {
         // Move the king back
@@ -403,22 +488,22 @@ void unmake_move(Board &b, const Move &m, const UndoInfo &u)
         b.squares[m.to] = u.captured_piece;
 
         // Move the rook back
-        if (m.to == 6) // White kingside: king e1→g1, rook h1→f1
+        if (m.to == 6) // White kingside
         {
             b.squares[7] = W_ROOK; // Restore rook to h1
             b.squares[5] = EMPTY;  // Clear f1
         }
-        else if (m.to == 2) // White queenside: king e1→c1, rook a1→d1
+        else if (m.to == 2) // White queenside
         {
             b.squares[0] = W_ROOK; // Restore rook to a1
             b.squares[3] = EMPTY;  // Clear d1
         }
-        else if (m.to == 118) // Black kingside: king e8→g8, rook h8→f8
+        else if (m.to == 118) // Black kingside
         {
             b.squares[119] = B_ROOK; // Restore rook to h8
             b.squares[117] = EMPTY;  // Clear f8
         }
-        else if (m.to == 112) // Black queenside: king e8→c8, rook a8→d8
+        else if (m.to == 112) // Black queenside
         {
             b.squares[112] = B_ROOK; // Restore rook to a8
             b.squares[115] = EMPTY;  // Clear d8
@@ -435,12 +520,14 @@ void unmake_move(Board &b, const Move &m, const UndoInfo &u)
     b.squares[m.from] = b.squares[m.to];
     b.squares[m.to] = u.captured_piece;
 
+    // Handle promotion
     if (m.flag == MOVE_PROMOTION)
     {
         int color = (b.squares[m.from] > 0) ? 1 : -1;
         b.squares[m.from] = color * W_PAWN;
     }
 
+    // Restore state
     b.en_passant_square = u.en_passant_square;
     b.castling_rights = u.castling_rights;
     b.side_to_move = u.side_to_move;
@@ -585,4 +672,22 @@ void generate_legal_moves(Board &b, int color, std::vector<Move> &moves)
         }
         unmake_move(b, m, u);
     }
+}
+
+uint64_t perft(Board &b, int depth)
+{
+    if (depth == 0)
+    {
+        return 1;
+    }
+    uint64_t nodes = 0;
+    std::vector<Move> moves;
+    generate_legal_moves(b, b.side_to_move, moves);
+    for (const Move &m : moves)
+    {
+        UndoInfo undo = make_move(b, m);
+        nodes += perft(b, depth - 1);
+        unmake_move(b, m, undo);
+    }
+    return nodes;
 }
