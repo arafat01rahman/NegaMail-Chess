@@ -465,13 +465,13 @@
                 }
 
                 if (data.move) {
-                    let move = game.move(data.move);
+                    let move = game.move(data.move, { sloppy: true });
                     if (!move && typeof data.move === 'string' && data.move.length >= 4) {
                         move = game.move({
                             from: data.move.slice(0, 2),
                             to: data.move.slice(2, 4),
                             promotion: 'q'
-                        });
+                        }, { sloppy: true });
                     }
 
                     if (move) {
