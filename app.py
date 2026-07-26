@@ -216,6 +216,32 @@ def analyze():
                 engine.wait()
 
 # ----------------------------------------------------------------------
+# Debug endpoint – test the engine in isolation
+# ----------------------------------------------------------------------
+@app.route('/debug-engine')
+def debug_engine():
+    import subprocess
+    try:
+        result = subprocess.run(
+            [ENGINE_PATH],
+            input="uci\nisready\nquit\n",
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        return jsonify({
+            'returncode': result.returncode,
+            'stdout': result.stdout,
+            'stderr': result.stderr
+        })
+    except subprocess.TimeoutExpired as e:
+        return jsonify({
+            'error': 'timeout',
+            'stdout_so_far': e.stdout,
+            'stderr_so_far': e.stderr
+        }), 500
+
+# ----------------------------------------------------------------------
 # Global error handler – always return JSON
 # ----------------------------------------------------------------------
 @app.errorhandler(Exception)
