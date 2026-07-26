@@ -302,7 +302,7 @@ void uci_loop()
         // Response: id name, id author, uciok
         if (token == "uci")
         {
-            std::cout << "id name NegaMail" << std::endl;
+            std::cout << "id name NegaMail-Chess" << std::endl;
             std::cout << "id author ARAFAT" << std::endl;
             std::cout << "uciok" << std::endl;
             std::flush(std::cout);
