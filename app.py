@@ -1,260 +1,215 @@
 """
-NegaMail-Chess API Server
-Hosted on Render.com - Free 24/7 Chess Engine API
-Author: ARAFAT
+NegaMail-Chess API Server (Pure Python edition)
+No external engine – uses python-chess and a simple minimax AI.
 """
 
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
-import subprocess
-import os
+import chess
 import time
-import select
-import traceback
+import os   
 
 app = Flask(__name__, static_folder='static')
 CORS(app)
 
-# Absolute path to engine binary (always works, no relative-path surprises)
-ENGINE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'engine')
-ENGINE_TOTAL_TIMEOUT = 12.0   # seconds for handshake + search
+# ---------- Evaluation function (material + piece-square tables) ----------
+PIECE_VALUES = {
+    chess.PAWN: 100,
+    chess.KNIGHT: 320,
+    chess.BISHOP: 330,
+    chess.ROOK: 500,
+    chess.QUEEN: 900,
+    chess.KING: 20000,
+}
 
-# ----------------------------------------------------------------------
-# Helper: read a line with timeout
-# ----------------------------------------------------------------------
-def read_line_with_timeout(stream, deadline):
-    while time.time() < deadline:
-        rlist, _, _ = select.select([stream], [], [], 0.1)
-        if rlist:
-            line = stream.readline()
-            if not line:
-                raise RuntimeError("Engine process exited unexpectedly (EOF)")
-            return line
-    raise TimeoutError("Timed out waiting for engine output")
+# Piece-square tables (simplified from your C++ version)
+# Index: square 0..63 (a1=0, h1=7, a2=16, ...)
+# We'll just use basic PST for simplicity.
+PAWN_PST = [
+    0,  0,  0,  0,  0,  0,  0,  0,
+    50, 50, 50, 50, 50, 50, 50, 50,
+    10, 10, 20, 30, 30, 20, 10, 10,
+    5,  5, 10, 25, 25, 10,  5,  5,
+    0,  0,  0, 20, 20,  0,  0,  0,
+    5, -5,-10,  0,  0,-10, -5,  5,
+    5, 10, 10,-20,-20, 10, 10,  5,
+    0,  0,  0,  0,  0,  0,  0,  0
+]
+KNIGHT_PST = [
+    -50,-40,-30,-30,-30,-30,-40,-50,
+    -40,-20,  0,  0,  0,  0,-20,-40,
+    -30,  0, 10, 15, 15, 10,  0,-30,
+    -30,  5, 15, 20, 20, 15,  5,-30,
+    -30,  0, 15, 20, 20, 15,  0,-30,
+    -30,  5, 10, 15, 15, 10,  5,-30,
+    -40,-20,  0,  5,  5,  0,-20,-40,
+    -50,-40,-30,-30,-30,-30,-40,-50
+]
+BISHOP_PST = [
+    -20,-10,-10,-10,-10,-10,-10,-20,
+    -10,  0,  0,  0,  0,  0,  0,-10,
+    -10,  0,  5, 10, 10,  5,  0,-10,
+    -10,  5,  5, 10, 10,  5,  5,-10,
+    -10,  0, 10, 10, 10, 10,  0,-10,
+    -10, 10, 10, 10, 10, 10, 10,-10,
+    -10,  5,  0,  0,  0,  0,  5,-10,
+    -20,-10,-10,-10,-10,-10,-10,-20
+]
+ROOK_PST = [
+    0,  0,  0,  0,  0,  0,  0,  0,
+    5, 10, 10, 10, 10, 10, 10,  5,
+   -5,  0,  0,  0,  0,  0,  0, -5,
+   -5,  0,  0,  0,  0,  0,  0, -5,
+   -5,  0,  0,  0,  0,  0,  0, -5,
+   -5,  0,  0,  0,  0,  0,  0, -5,
+   -5,  0,  0,  0,  0,  0,  0, -5,
+    0,  0,  0,  5,  5,  0,  0,  0
+]
+QUEEN_PST = [
+    -20,-10,-10, -5, -5,-10,-10,-20,
+    -10,  0,  0,  0,  0,  0,  0,-10,
+    -10,  0,  5,  5,  5,  5,  0,-10,
+    -5,  0,  5,  5,  5,  5,  0, -5,
+    0,  0,  5,  5,  5,  5,  0, -5,
+    -10,  5,  5,  5,  5,  5,  0,-10,
+    -10,  0,  5,  0,  0,  0,  0,-10,
+    -20,-10,-10, -5, -5,-10,-10,-20
+]
+KING_PST = [
+    -30,-40,-40,-50,-50,-40,-40,-30,
+    -30,-40,-40,-50,-50,-40,-40,-30,
+    -30,-40,-40,-50,-50,-40,-40,-30,
+    -30,-40,-40,-50,-50,-40,-40,-30,
+    -20,-30,-30,-40,-40,-30,-30,-20,
+    -10,-20,-20,-20,-20,-20,-20,-10,
+    20, 20,  0,  0,  0,  0, 20, 20,
+    20, 30, 10,  0,  0, 10, 30, 20
+]
 
-# ----------------------------------------------------------------------
-# Helper: send command and wait for expected prefix
-# ----------------------------------------------------------------------
-def send_and_wait(engine, cmd, expected_prefix, deadline):
-    engine.stdin.write(cmd + '\n')
-    engine.stdin.flush()
-    while time.time() < deadline:
-        line = read_line_with_timeout(engine.stdout, deadline)
-        if line.startswith(expected_prefix):
-            return line
-    raise TimeoutError(f"Engine did not respond with '{expected_prefix}'")
+PST = {
+    chess.PAWN: PAWN_PST,
+    chess.KNIGHT: KNIGHT_PST,
+    chess.BISHOP: BISHOP_PST,
+    chess.ROOK: ROOK_PST,
+    chess.QUEEN: QUEEN_PST,
+    chess.KING: KING_PST,
+}
 
-# ----------------------------------------------------------------------
-# Main move endpoint
-# ----------------------------------------------------------------------
+def evaluate(board):
+    """Return score from White's perspective."""
+    if board.is_checkmate():
+        return -999999 if board.turn == chess.WHITE else 999999
+    if board.is_stalemate() or board.is_insufficient_material():
+        return 0
+
+    score = 0
+    # Material + PST
+    for color in (chess.WHITE, chess.BLACK):
+        multiplier = 1 if color == chess.WHITE else -1
+        for piece_type in PIECE_VALUES:
+            squares = board.pieces(piece_type, color)
+            for sq in squares:
+                # PST index: for black we mirror vertically (rank 7 - rank)
+                if color == chess.WHITE:
+                    idx = sq
+                else:
+                    rank = chess.square_rank(sq)
+                    file = chess.square_file(sq)
+                    idx = (7 - rank) * 8 + file
+                score += multiplier * (PIECE_VALUES[piece_type] + PST[piece_type][idx])
+    return score
+
+# ---------- Minimax with alpha‑beta ----------
+def minimax(board, depth, alpha, beta, maximizing):
+    if depth == 0 or board.is_game_over():
+        return evaluate(board)
+
+    if maximizing:
+        max_eval = -999999
+        for move in board.legal_moves:
+            board.push(move)
+            eval = minimax(board, depth-1, alpha, beta, False)
+            board.pop()
+            max_eval = max(max_eval, eval)
+            alpha = max(alpha, eval)
+            if beta <= alpha:
+                break
+        return max_eval
+    else:
+        min_eval = 999999
+        for move in board.legal_moves:
+            board.push(move)
+            eval = minimax(board, depth-1, alpha, beta, True)
+            board.pop()
+            min_eval = min(min_eval, eval)
+            beta = min(beta, eval)
+            if beta <= alpha:
+                break
+        return min_eval
+
+def find_best_move(board, depth=3):
+    """Returns the best move in UCI format."""
+    if board.is_game_over():
+        return None
+    best_move = None
+    best_score = -999999
+    for move in board.legal_moves:
+        board.push(move)
+        score = minimax(board, depth-1, -999999, 999999, False)
+        board.pop()
+        if score > best_score:
+            best_score = score
+            best_move = move
+    return best_move
+
+# ---------- Flask endpoints ----------
 @app.route('/move', methods=['POST'])
 def get_move():
     data = request.json
-    fen = data.get('fen', 'start')
+    fen = data.get('fen', chess.STARTING_FEN)
+    depth = data.get('depth', 3)  # allow client to set depth
 
-    engine = None
     try:
-        # Start engine – keep stderr separate for debugging
-        engine = subprocess.Popen(
-            [ENGINE_PATH],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,   # capture stderr to diagnose issues
-            text=True,
-            bufsize=1
-        )
+        board = chess.Board(fen)
+    except ValueError:
+        return jsonify({'error': 'Invalid FEN'}), 400
 
-        deadline = time.time() + ENGINE_TOTAL_TIMEOUT
+    if board.is_game_over():
+        return jsonify({'error': 'Game over'}), 400
 
-        app.logger.info(f"Starting UCI handshake for fen={fen}")
+    start = time.time()
+    move = find_best_move(board, depth)
+    elapsed = time.time() - start
 
-        # ---- UCI handshake ----
-        send_and_wait(engine, 'uci', 'uciok', deadline)
-        app.logger.info("Received uciok")
-        send_and_wait(engine, 'isready', 'readyok', deadline)
-        app.logger.info("Received readyok")
+    if move is None:
+        return jsonify({'error': 'No legal moves'}), 400
 
-        # ---- Position ----
-        engine.stdin.write(f'position fen {fen}\n')
-        engine.stdin.flush()
+    return jsonify({
+        'move': move.uci(),
+        'score': evaluate(board),  # score from current position (before moving)
+        'time': round(elapsed, 3),
+        'fen': fen
+    })
 
-        # ---- Search with time control (3 seconds max) ----
-        engine.stdin.write(f'go movetime 3000\n')
-        engine.stdin.flush()
-        app.logger.info("Search started (movetime 3000ms)")
-
-        # ---- Read bestmove ----
-        bestmove = None
-        score = 0
-        while time.time() < deadline:
-            line = read_line_with_timeout(engine.stdout, deadline)
-            if line.startswith('bestmove'):
-                parts = line.split()
-                if len(parts) > 1:
-                    bestmove = parts[1]
-                app.logger.info(f"Received bestmove: {bestmove}")
-                break
-            elif line.startswith('info score cp'):
-                parts = line.split()
-                for i, p in enumerate(parts):
-                    if p == 'cp' and i+1 < len(parts):
-                        try:
-                            score = int(parts[i+1])
-                        except ValueError:
-                            pass
-
-        if bestmove is None:
-            raise TimeoutError("No 'bestmove' received from engine")
-
-        return jsonify({
-            'move': bestmove,
-            'score': score,
-            'fen': fen
-        })
-
-    except (TimeoutError, RuntimeError) as e:
-        # CRITICAL: terminate the engine BEFORE reading stderr
-        if engine:
-            engine.terminate()
-            try:
-                engine.wait(timeout=2)
-            except subprocess.TimeoutExpired:
-                engine.kill()
-                engine.wait()
-
-        # Now it's safe to read stderr (process is dead, pipe closed)
-        stderr_output = ""
-        if engine and engine.stderr:
-            try:
-                stderr_output = engine.stderr.read()
-            except Exception:
-                pass
-
-        app.logger.error(f"Engine error: {e} | stderr: {stderr_output[:500]}")
-        return jsonify({'error': str(e), 'stderr': stderr_output[:500]}), 500
-
-    except Exception as e:
-        app.logger.exception("Unexpected error in /move")
-        return jsonify({'error': f"Unexpected: {str(e)}"}), 500
-
-    finally:
-        if engine:
-            engine.terminate()
-            try:
-                engine.wait(timeout=2)
-            except subprocess.TimeoutExpired:
-                engine.kill()
-                engine.wait()
-
-# ----------------------------------------------------------------------
-# Analyze endpoint (optional, same pattern)
-# ----------------------------------------------------------------------
 @app.route('/analyze', methods=['POST'])
 def analyze():
+    # Optional – same as /move but returns more info
     data = request.json
-    fen = data.get('fen', 'start')
+    fen = data.get('fen', chess.STARTING_FEN)
+    board = chess.Board(fen)
+    if board.is_game_over():
+        return jsonify({'error': 'Game over'}), 400
+    move = find_best_move(board, 3)
+    return jsonify({'bestmove': move.uci() if move else None})
 
-    engine = None
-    try:
-        engine = subprocess.Popen(
-            [ENGINE_PATH],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1
-        )
-
-        deadline = time.time() + ENGINE_TOTAL_TIMEOUT
-        send_and_wait(engine, 'uci', 'uciok', deadline)
-        send_and_wait(engine, 'isready', 'readyok', deadline)
-
-        engine.stdin.write(f'position fen {fen}\n')
-        engine.stdin.flush()
-        engine.stdin.write(f'go movetime 2000\n')
-        engine.stdin.flush()
-
-        bestmove = None
-        while time.time() < deadline:
-            line = read_line_with_timeout(engine.stdout, deadline)
-            if line.startswith('bestmove'):
-                parts = line.split()
-                if len(parts) > 1:
-                    bestmove = parts[1]
-                break
-
-        return jsonify({'bestmove': bestmove})
-
-    except (TimeoutError, RuntimeError) as e:
-        if engine:
-            engine.terminate()
-            try:
-                engine.wait(timeout=2)
-            except subprocess.TimeoutExpired:
-                engine.kill()
-                engine.wait()
-        stderr_output = ""
-        if engine and engine.stderr:
-            try:
-                stderr_output = engine.stderr.read()
-            except Exception:
-                pass
-        app.logger.error(f"Analyze error: {e} | stderr: {stderr_output[:500]}")
-        return jsonify({'error': str(e)}), 500
-
-    except Exception as e:
-        app.logger.exception("Unexpected error in /analyze")
-        return jsonify({'error': str(e)}), 500
-
-    finally:
-        if engine:
-            engine.terminate()
-            try:
-                engine.wait(timeout=2)
-            except subprocess.TimeoutExpired:
-                engine.kill()
-                engine.wait()
-
-# ----------------------------------------------------------------------
-# Debug endpoint – test the engine in isolation
-# ----------------------------------------------------------------------
 @app.route('/debug-engine')
 def debug_engine():
-    import subprocess
-    try:
-        result = subprocess.run(
-            [ENGINE_PATH],
-            input="uci\nisready\nquit\n",
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        return jsonify({
-            'returncode': result.returncode,
-            'stdout': result.stdout,
-            'stderr': result.stderr
-        })
-    except subprocess.TimeoutExpired as e:
-        return jsonify({
-            'error': 'timeout',
-            'stdout_so_far': e.stdout,
-            'stderr_so_far': e.stderr
-        }), 500
+    # Not needed anymore, but keep for compatibility
+    return jsonify({'status': 'pure Python engine', 'engine': 'NegaMail-AI'})
 
-# ----------------------------------------------------------------------
-# Global error handler – always return JSON
-# ----------------------------------------------------------------------
-@app.errorhandler(Exception)
-def handle_exception(e):
-    app.logger.exception("Unhandled exception")
-    return jsonify({'error': str(e)}), 500
-
-# ----------------------------------------------------------------------
-# Health & root
-# ----------------------------------------------------------------------
 @app.route('/health')
 def health():
-    return jsonify({'status': 'ok', 'engine': 'NegaMail-Chess'})
+    return jsonify({'status': 'ok', 'engine': 'NegaMail-AI (Python)'})
 
 @app.errorhandler(404)
 def not_found(e):
