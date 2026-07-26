@@ -4,10 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>♟️ NegaMail-Chess - Play Online</title>
-    
-    <!-- Load chess.js from CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.2/chess.min.js"></script>
-    
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -46,7 +43,6 @@
             font-size: 0.9rem;
         }
         .subtitle a { color: #f7971e; text-decoration: none; }
-        
         .chessboard {
             display: grid;
             grid-template-columns: repeat(8, 1fr);
@@ -72,12 +68,9 @@
         .square.dark { background: #b58863; }
         .square.selected { background: #7fc97f; }
         .square.highlight { background: rgba(255, 255, 100, 0.5); }
-        .square.last-move { background: rgba(155, 199, 0, 0.41); }
-        
         .piece { pointer-events: none; line-height: 1; }
         .piece-white { color: #fff; text-shadow: 0 0 3px rgba(0,0,0,0.5); }
         .piece-black { color: #000; text-shadow: 0 0 3px rgba(255,255,255,0.3); }
-        
         .controls {
             display: flex;
             justify-content: center;
@@ -105,7 +98,7 @@
             box-shadow: none;
         }
         .btn-secondary:hover { background: rgba(255,255,255,0.2); }
-        
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .status {
             text-align: center;
             font-size: 1.1rem;
@@ -122,7 +115,6 @@
         .status.thinking { color: #ffd700; background: rgba(255, 215, 0, 0.1); }
         .status.checkmate { color: #ff6b6b; background: rgba(255, 107, 107, 0.1); }
         .status.draw { color: #ffd93d; background: rgba(255, 217, 61, 0.1); }
-        
         .engine-info {
             text-align: center;
             font-size: 0.8rem;
@@ -146,7 +138,6 @@
         }
         .move-history::-webkit-scrollbar { width: 4px; }
         .move-history::-webkit-scrollbar-thumb { background: #f7971e; border-radius: 4px; }
-        
         @media (max-width: 480px) {
             .container { padding: 15px; }
             h1 { font-size: 1.5rem; }
@@ -172,10 +163,10 @@
         <div class="controls">
             <button class="btn" onclick="resetGame()">🔄 New Game</button>
             <button class="btn btn-secondary" onclick="flipBoard()">🔄 Flip Board</button>
-            <button class="btn btn-secondary" onclick="engineMove()">🤖 Engine Move</button>
+            <button class="btn btn-secondary" id="engineMoveBtn" onclick="engineMove()">🤖 Engine Move</button>
         </div>
         
-        <div class="status" id="status">⚪ White to move</div>
+        <div class="status" id="status">⚪ Your turn (White)</div>
         <div class="move-history" id="moveHistory">Moves: —</div>
         
         <div class="engine-info">
@@ -185,22 +176,19 @@
 
     <script>
         // ============================================================
-        // Chess Engine with FEN-based rendering (no board() method needed)
+        // Human vs Engine – Human plays White, Engine plays Black
         // ============================================================
         
         const API_URL = '/move';
         const ENGINE_DEPTH = 4;
+        const HUMAN_COLOR = 'w';    // Human plays White
+        const ENGINE_COLOR = 'b';   // Engine plays Black
         
         // Piece Unicode symbols
         const UNICODE_PIECES = {
             'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
             'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟'
         };
-        
-        // Piece color class
-        function pieceColor(piece) {
-            return (piece === piece.toUpperCase()) ? 'white' : 'black';
-        }
         
         // ============================================================
         // Game State
@@ -222,23 +210,20 @@
             renderBoard();
             updateStatus();
             updateMoveHistory();
-            console.log('✅ Board initialized!');
+            document.getElementById('engineMoveBtn').disabled = false;
+            console.log('✅ Board initialized – Human plays White, Engine plays Black');
         }
         
         // ============================================================
-        // Render Board from FEN (works with any chess.js version)
+        // Render Board from FEN
         // ============================================================
         function renderBoard() {
             if (!boardElement || !game) return;
-            
             boardElement.innerHTML = '';
             const fen = game.fen();
             const parts = fen.split(' ');
             const boardStr = parts[0];
-            
-            // Parse FEN board
             const rows = boardStr.split('/');
-            // Determine orientation
             const ranks = isFlipped ? [0, 1, 2, 3, 4, 5, 6, 7] : [7, 6, 5, 4, 3, 2, 1, 0];
             
             for (let rankIndex of ranks) {
@@ -247,7 +232,6 @@
                 for (let i = 0; i < row.length; i++) {
                     const ch = row[i];
                     if (ch >= '1' && ch <= '8') {
-                        // Empty squares
                         const emptyCount = parseInt(ch);
                         for (let j = 0; j < emptyCount; j++) {
                             const square = createSquare(rankIndex, fileIndex, null);
@@ -255,7 +239,6 @@
                             fileIndex++;
                         }
                     } else {
-                        // Piece
                         const square = createSquare(rankIndex, fileIndex, ch);
                         boardElement.appendChild(square);
                         fileIndex++;
@@ -268,22 +251,12 @@
             const square = document.createElement('div');
             const isLight = (rank + file) % 2 === 0;
             square.className = `square ${isLight ? 'light' : 'dark'}`;
-            
-            // Square name (e.g., "e4")
             const squareName = String.fromCharCode(97 + file) + (8 - rank);
             square.dataset.square = squareName;
             
-            // Highlight selected
-            if (selectedSquare === squareName) {
-                square.classList.add('selected');
-            }
+            if (selectedSquare === squareName) square.classList.add('selected');
+            if (legalMoves.includes(squareName)) square.classList.add('highlight');
             
-            // Highlight legal moves
-            if (legalMoves.includes(squareName)) {
-                square.classList.add('highlight');
-            }
-            
-            // Add piece
             if (pieceChar) {
                 const pieceSpan = document.createElement('span');
                 pieceSpan.textContent = UNICODE_PIECES[pieceChar];
@@ -297,21 +270,25 @@
         }
         
         // ============================================================
-        // Square Click Handler
+        // Square Click – Only allow human's pieces
         // ============================================================
         function onSquareClick(square) {
             if (isEngineThinking) return;
             if (game.game_over()) return;
+            // Only allow moves when it's human's turn
+            if (game.turn() !== HUMAN_COLOR) return;
             
             const piece = game.get(square);
             
             if (selectedSquare === null) {
-                if (piece && piece.color === game.turn()) {
+                // Select only if the piece belongs to the human
+                if (piece && piece.color === HUMAN_COLOR) {
                     selectedSquare = square;
                     legalMoves = game.moves({ square: square, verbose: true }).map(m => m.to);
                     renderBoard();
                 }
             } else {
+                // Attempt move
                 const move = game.move({
                     from: selectedSquare,
                     to: square,
@@ -326,11 +303,13 @@
                     updateStatus();
                     updateMoveHistory();
                     
+                    // After human move, engine moves (if not game over)
                     if (!game.game_over()) {
                         setTimeout(engineMove, 300);
                     }
                 } else {
-                    if (piece && piece.color === game.turn()) {
+                    // If clicking on own piece, re-select
+                    if (piece && piece.color === HUMAN_COLOR) {
                         selectedSquare = square;
                         legalMoves = game.moves({ square: square, verbose: true }).map(m => m.to);
                         renderBoard();
@@ -344,17 +323,24 @@
         }
         
         // ============================================================
-        // Engine Move
+        // Engine Move – Only when it's engine's turn
         // ============================================================
         async function engineMove() {
             if (isEngineThinking) return;
             if (game.game_over()) return;
+            // Only allow engine move if it's engine's turn
+            if (game.turn() !== ENGINE_COLOR) {
+                // If it's human's turn, inform or do nothing
+                document.getElementById('status').textContent = '⏳ It\'s your turn!';
+                return;
+            }
             
             isEngineThinking = true;
             const status = document.getElementById('status');
             status.textContent = '🤔 Engine thinking...';
             status.className = 'status thinking';
             document.getElementById('engineStatus').textContent = 'Thinking...';
+            document.getElementById('engineMoveBtn').disabled = true;
             
             try {
                 const response = await fetch(API_URL, {
@@ -373,6 +359,7 @@
                     status.className = 'status';
                     isEngineThinking = false;
                     document.getElementById('engineStatus').textContent = 'Error';
+                    document.getElementById('engineMoveBtn').disabled = false;
                     return;
                 }
                 
@@ -401,8 +388,14 @@
             }
             
             isEngineThinking = false;
+            document.getElementById('engineMoveBtn').disabled = false;
             if (!game.game_over()) {
                 document.getElementById('engineStatus').textContent = 'Ready';
+                // If it's human's turn, update status
+                if (game.turn() === HUMAN_COLOR) {
+                    status.textContent = '♟️ Your turn';
+                    status.className = 'status';
+                }
             }
         }
         
@@ -413,10 +406,11 @@
             const status = document.getElementById('status');
             
             if (game.in_checkmate()) {
-                const winner = game.turn() === 'w' ? '⚫ Black' : '⚪ White';
+                const winner = game.turn() === 'w' ? 'Black' : 'White';
                 status.textContent = `🏆 Checkmate! ${winner} wins!`;
                 status.className = 'status checkmate';
                 document.getElementById('engineStatus').textContent = 'Game Over';
+                document.getElementById('engineMoveBtn').disabled = true;
                 return;
             }
             
@@ -424,13 +418,25 @@
                 status.textContent = '🤝 Draw!';
                 status.className = 'status draw';
                 document.getElementById('engineStatus').textContent = 'Game Over';
+                document.getElementById('engineMoveBtn').disabled = true;
                 return;
             }
             
-            const turn = game.turn() === 'w' ? '⚪ White' : '⚫ Black';
-            const check = game.in_check() ? ' (Check!)' : '';
-            status.textContent = `${turn} to move${check}`;
-            status.className = 'status';
+            if (game.turn() === HUMAN_COLOR) {
+                status.textContent = '♟️ Your turn (White)';
+                status.className = 'status';
+            } else {
+                status.textContent = '🤖 Engine thinking...';
+                status.className = 'status thinking';
+                // If it's engine's turn but not thinking yet, trigger engine move
+                if (!isEngineThinking) {
+                    // If the engine hasn't started thinking, trigger it
+                    // But we usually trigger after human move, so this is a safety net
+                    if (!game.game_over()) {
+                        setTimeout(engineMove, 100);
+                    }
+                }
+            }
         }
         
         function updateMoveHistory() {
@@ -439,12 +445,9 @@
                 el.textContent = 'Moves: —';
                 return;
             }
-            
             let html = 'Moves: ';
             for (let i = 0; i < moveHistory.length; i++) {
-                if (i % 2 === 0) {
-                    html += `${Math.floor(i/2) + 1}. `;
-                }
+                if (i % 2 === 0) html += `${Math.floor(i/2) + 1}. `;
                 html += `${moveHistory[i]} `;
             }
             el.textContent = html;
@@ -464,6 +467,7 @@
             updateStatus();
             updateMoveHistory();
             document.getElementById('engineStatus').textContent = 'Ready';
+            document.getElementById('engineMoveBtn').disabled = false;
         }
         
         function flipBoard() {
