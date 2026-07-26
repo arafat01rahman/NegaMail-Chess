@@ -14,13 +14,14 @@ services:
       apt-get install -y g++ make
       echo "🔨 Compiling chess engine..."
       g++ -O2 -std=c++17 \
-        main.cpp \              # ← ADD THIS LINE
+        main.cpp \
         board.cpp \
         evaluate.cpp \
         search.cpp \
         uci.cpp \
         -o engine
-      echo "✅ Engine compiled!"
+      chmod +x engine
+      echo "✅ Engine compiled and made executable!"
       echo "📦 Installing Python dependencies..."
       pip install -r requirements.txt
       echo "✅ Ready to deploy!"

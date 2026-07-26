@@ -503,7 +503,7 @@ void unmake_move(Board &b, const Move &m, const UndoInfo &u)
             b.squares[119] = B_ROOK; // Restore rook to h8
             b.squares[117] = EMPTY;  // Clear f8
         }
-        else if (m.to == 112) // Black queenside
+        else if (m.to == 114) // Black queenside
         {
             b.squares[112] = B_ROOK; // Restore rook to a8
             b.squares[115] = EMPTY;  // Clear d8

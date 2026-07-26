@@ -1,8 +1,7 @@
 #include "search.h"
 #include "evaluate.h"
 #include <vector>
-#include "board.h" 
-
+#include "board.h"
 
 int negamax(Board &b, int depth, int alpha, int beta, int color, int max_depth)
 {
@@ -28,6 +27,8 @@ int negamax(Board &b, int depth, int alpha, int beta, int color, int max_depth)
     int best = -1000000;
     for (const Move &m : moves)
     {
+        if (stop_search) 
+            break;
         // make the move
         UndoInfo u = make_move(b, m);
         // recursive negamax here

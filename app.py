@@ -10,6 +10,7 @@ import subprocess
 import os
 import json
 import time
+import select
 import signal
 
 app = Flask(__name__, static_folder='static')
@@ -17,7 +18,7 @@ CORS(app)
 
 # Engine configuration
 ENGINE_PATH = './engine'
-ENGINE_TIMEOUT = 5  # seconds
+ENGINE_TIMEOUT = 5  # seconds (search timeout)
 
 @app.route('/')
 def home():
@@ -33,8 +34,8 @@ def get_move():
     """
     data = request.json
     fen = data.get('fen', 'start')
-    depth = data.get('depth', 4)
-    
+    depth = data.get('depth', 4)  # default depth 4, but we may reduce to 3 for speed
+
     try:
         # Start engine process
         engine = subprocess.Popen(
@@ -45,61 +46,85 @@ def get_move():
             text=True,
             bufsize=1
         )
-        
-        # Send UCI commands
-        commands = [
-            'uci\n',
-            'isready\n',
-            f'position fen {fen}\n',
-            f'go depth {depth}\n'
-        ]
-        
-        for cmd in commands:
-            engine.stdin.write(cmd)
+
+        def write_cmd(cmd):
+            engine.stdin.write(cmd + '\n')
             engine.stdin.flush()
-        
-        # Read engine output
+
+        # --- UCI Handshake ---
+        write_cmd('uci')
+        # Wait for uciok
+        for line in engine.stdout:
+            if line.startswith('uciok'):
+                break
+
+        write_cmd('isready')
+        for line in engine.stdout:
+            if line.startswith('readyok'):
+                break
+
+        # --- Send position and go ---
+        write_cmd(f'position fen {fen}')
+        write_cmd(f'go depth {depth}')
+
+        # --- Read result with timeout ---
         bestmove = None
         score = 0
-        
-        for line in engine.stdout:
-            if line.startswith('bestmove'):
-                parts = line.split()
-                bestmove = parts[1] if len(parts) > 1 else None
-                break
-            elif line.startswith('info score cp'):
-                # Parse score for display
-                parts = line.split()
-                for i, part in enumerate(parts):
-                    if part == 'cp' and i + 1 < len(parts):
-                        try:
-                            score = int(parts[i + 1])
-                        except:
-                            pass
-        
+        start_time = time.time()
+        timeout = ENGINE_TIMEOUT
+
+        while time.time() - start_time < timeout:
+            # Check if stdout has data
+            if select.select([engine.stdout], [], [], 0.1)[0]:
+                line = engine.stdout.readline()
+                if line.startswith('bestmove'):
+                    parts = line.split()
+                    if len(parts) > 1:
+                        bestmove = parts[1]
+                    break
+                elif line.startswith('info score cp'):
+                    parts = line.split()
+                    for i, p in enumerate(parts):
+                        if p == 'cp' and i+1 < len(parts):
+                            try:
+                                score = int(parts[i+1])
+                            except:
+                                pass
+            else:
+                # No output yet, continue
+                continue
+        else:
+            # Timeout reached
+            engine.terminate()
+            engine.wait(timeout=2)
+            return jsonify({'error': 'Engine timeout'}), 500
+
         engine.terminate()
         engine.wait(timeout=2)
-        
+
+        if bestmove is None:
+            return jsonify({'error': 'No move found'}), 500
+
         return jsonify({
             'move': bestmove,
             'score': score,
             'fen': fen,
             'depth': depth
         })
-        
+
     except subprocess.TimeoutExpired:
         engine.kill()
-        return jsonify({'error': 'Engine timeout'}), 500
+        return jsonify({'error': 'Engine killed due to timeout'}), 500
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
-    """Get multiple moves with scores (for analysis)"""
+    """Get multiple moves with scores (for analysis) - optional"""
     data = request.json
     fen = data.get('fen', 'start')
     depth = data.get('depth', 4)
-    
+
     try:
         engine = subprocess.Popen(
             [ENGINE_PATH],
@@ -109,36 +134,39 @@ def analyze():
             text=True,
             bufsize=1
         )
-        
-        commands = [
-            'uci\n',
-            'isready\n',
-            f'position fen {fen}\n',
-            f'go depth {depth} movetime 1000\n'
-        ]
-        
-        for cmd in commands:
-            engine.stdin.write(cmd)
+
+        def write_cmd(cmd):
+            engine.stdin.write(cmd + '\n')
             engine.stdin.flush()
-        
-        # Collect info lines
-        moves = []
+
+        write_cmd('uci')
         for line in engine.stdout:
-            if line.startswith('info'):
-                # Parse multi-line info
-                pass
-            elif line.startswith('bestmove'):
+            if line.startswith('uciok'):
+                break
+
+        write_cmd('isready')
+        for line in engine.stdout:
+            if line.startswith('readyok'):
+                break
+
+        write_cmd(f'position fen {fen}')
+        write_cmd(f'go depth {depth} movetime 1000')
+
+        # Collect bestmove and score
+        bestmove = None
+        for line in engine.stdout:
+            if line.startswith('bestmove'):
                 parts = line.split()
-                bestmove = parts[1] if len(parts) > 1 else None
-                engine.terminate()
-                return jsonify({
-                    'bestmove': bestmove,
-                    'moves': moves
-                })
-        
+                if len(parts) > 1:
+                    bestmove = parts[1]
+                break
+            # Could also parse multipv info
+
         engine.terminate()
-        return jsonify({'moves': moves})
-        
+        engine.wait(timeout=2)
+
+        return jsonify({'bestmove': bestmove})
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
