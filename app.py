@@ -10,42 +10,32 @@ import subprocess
 import os
 import time
 import select
-import signal
-import sys
 import traceback
 
 app = Flask(__name__, static_folder='static')
 CORS(app)
 
-# Absolute path to engine binary
+# Absolute path to engine binary (always works, no relative-path surprises)
 ENGINE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'engine')
-ENGINE_TOTAL_TIMEOUT = 15.0   # seconds – increased for free tier
+ENGINE_TOTAL_TIMEOUT = 12.0   # seconds for handshake + search
 
 # ----------------------------------------------------------------------
-# Helper: read a line from a stream with a timeout
+# Helper: read a line with timeout
 # ----------------------------------------------------------------------
 def read_line_with_timeout(stream, deadline):
-    """
-    Read one line from `stream` using select() to avoid blocking.
-    Raises TimeoutError if deadline is reached, or RuntimeError if EOF.
-    """
     while time.time() < deadline:
         rlist, _, _ = select.select([stream], [], [], 0.1)
         if rlist:
             line = stream.readline()
-            if not line:          # EOF – process died
+            if not line:
                 raise RuntimeError("Engine process exited unexpectedly (EOF)")
             return line
     raise TimeoutError("Timed out waiting for engine output")
 
 # ----------------------------------------------------------------------
-# Helper: send a command and wait for a specific prefix
+# Helper: send command and wait for expected prefix
 # ----------------------------------------------------------------------
 def send_and_wait(engine, cmd, expected_prefix, deadline):
-    """
-    Write `cmd` to engine.stdin, then read lines until one starts with
-    `expected_prefix`.  Raises on timeout or EOF.
-    """
     engine.stdin.write(cmd + '\n')
     engine.stdin.flush()
     while time.time() < deadline:
@@ -64,12 +54,12 @@ def get_move():
 
     engine = None
     try:
-        # Start engine with stderr merged into stdout to avoid deadlock
+        # Start engine – keep stderr separate for debugging
         engine = subprocess.Popen(
             [ENGINE_PATH],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
+            stderr=subprocess.PIPE,   # capture stderr to diagnose issues
             text=True,
             bufsize=1
         )
@@ -119,26 +109,33 @@ def get_move():
         return jsonify({
             'move': bestmove,
             'score': score,
-            'fen': fen,
-            'depth': 0
+            'fen': fen
         })
 
     except (TimeoutError, RuntimeError) as e:
-        app.logger.error(f"Engine error: {e}")
-        # Collect any leftover output for debugging
-        leftover = ""
-        if engine and engine.stdout:
+        # CRITICAL: terminate the engine BEFORE reading stderr
+        if engine:
+            engine.terminate()
             try:
-                leftover = engine.stdout.read()
-                if leftover:
-                    app.logger.error(f"Engine leftover output: {leftover}")
+                engine.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                engine.kill()
+                engine.wait()
+
+        # Now it's safe to read stderr (process is dead, pipe closed)
+        stderr_output = ""
+        if engine and engine.stderr:
+            try:
+                stderr_output = engine.stderr.read()
             except Exception:
                 pass
-        return jsonify({'error': str(e), 'leftover': leftover}), 500
+
+        app.logger.error(f"Engine error: {e} | stderr: {stderr_output[:500]}")
+        return jsonify({'error': str(e), 'stderr': stderr_output[:500]}), 500
 
     except Exception as e:
         app.logger.exception("Unexpected error in /move")
-        return jsonify({'error': f"Unexpected error: {str(e)}", 'trace': traceback.format_exc()}), 500
+        return jsonify({'error': f"Unexpected: {str(e)}"}), 500
 
     finally:
         if engine:
@@ -150,7 +147,7 @@ def get_move():
                 engine.wait()
 
 # ----------------------------------------------------------------------
-# Analyze endpoint (optional)
+# Analyze endpoint (optional, same pattern)
 # ----------------------------------------------------------------------
 @app.route('/analyze', methods=['POST'])
 def analyze():
@@ -163,7 +160,7 @@ def analyze():
             [ENGINE_PATH],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
+            stderr=subprocess.PIPE,
             text=True,
             bufsize=1
         )
@@ -189,7 +186,20 @@ def analyze():
         return jsonify({'bestmove': bestmove})
 
     except (TimeoutError, RuntimeError) as e:
-        app.logger.error(f"Analyze error: {e}")
+        if engine:
+            engine.terminate()
+            try:
+                engine.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                engine.kill()
+                engine.wait()
+        stderr_output = ""
+        if engine and engine.stderr:
+            try:
+                stderr_output = engine.stderr.read()
+            except Exception:
+                pass
+        app.logger.error(f"Analyze error: {e} | stderr: {stderr_output[:500]}")
         return jsonify({'error': str(e)}), 500
 
     except Exception as e:
@@ -206,7 +216,7 @@ def analyze():
                 engine.wait()
 
 # ----------------------------------------------------------------------
-# Global exception handler – ensures JSON errors
+# Global error handler – always return JSON
 # ----------------------------------------------------------------------
 @app.errorhandler(Exception)
 def handle_exception(e):
@@ -214,7 +224,7 @@ def handle_exception(e):
     return jsonify({'error': str(e)}), 500
 
 # ----------------------------------------------------------------------
-# Health and other routes
+# Health & root
 # ----------------------------------------------------------------------
 @app.route('/health')
 def health():
