@@ -24,6 +24,7 @@
  */
 
 #include "uci.h"
+#include <iostream>
 #include <sstream>
 #include <cctype>
 
