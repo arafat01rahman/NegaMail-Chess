@@ -483,14 +483,9 @@
                 status.textContent = '❌ Connection error!';
                 status.className = 'status';
                 document.getElementById('engineStatus').textContent = 'Offline';
-
-                // Try to read error from response if possible
-                if (error.response) {
-                    error.response.text().then(text => {
-                        console.error('Server response:', text);
-                        status.textContent = '❌ Server error: ' + text.slice(0, 100);
-                    });
-                }
+            } finally {
+                isEngineThinking = false;
+                document.getElementById('engineMoveBtn').disabled = false;
             }
         }
 
