@@ -1,5 +1,6 @@
 CXX = g++
-CXXFLAGS = -g -std=c++17 -Wall
+# CXXFLAGS = -g -std=c++17 -Wall
+CXXFLAGS = -std=c++17 -o2 -s -Wall
 TARGET = engine
 SOURCES = main.cpp board.cpp evaluate.cpp search.cpp uci.cpp
 
