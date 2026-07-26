@@ -1,6 +1,8 @@
 #include "search.h"
 #include "evaluate.h"
 #include <vector>
+#include "board.h" 
+
 
 int negamax(Board &b, int depth, int alpha, int beta, int color, int max_depth)
 {
@@ -48,8 +50,11 @@ int negamax(Board &b, int depth, int alpha, int beta, int color, int max_depth)
     return best;
 }
 
+extern bool stop_search;
+
 Move find_best_move(Board &b, int depth)
 {
+    int color = b.side_to_move;
     std::vector<Move> moves;
     generate_legal_moves(b, b.side_to_move, moves);
 
@@ -58,10 +63,12 @@ Move find_best_move(Board &b, int depth)
 
     Move best_move = moves[0];
     int best_score = -1000000;
-    int color = (b.side_to_move == 0) ? 1 : -1;
 
     for (const Move &m : moves)
     {
+        if (stop_search)
+            break;
+
         UndoInfo u = make_move(b, m);
         int score = -negamax(b, depth - 1, -1000000, 1000000, -color, depth);
         unmake_move(b, m, u);

@@ -1,4 +1,5 @@
 #include "evaluate.h"
+#include "board.h" 
 
 // Material values are assgined
 const int PAWN_VALUE = 100;
@@ -154,28 +155,28 @@ int evaluate(const Board &b)
         if (piece == EMPTY)
             continue;
 
-        int type = type_of(piece);
+        int type = type_of(piece);  // Returnss -->>> 1-6 (absolute)
         int color = color_of(piece);
 
         int value = 0;
         switch (type)
         {
-        case W_PAWN:
+        case 1:  // PAWN
             value = PAWN_VALUE + PST_PAWN[sq];
             break;
-        case W_KNIGHT:
+        case 2:  // KNIGHT
             value = KNIGHT_VALUE + PST_KNIGHT[sq];
             break;
-        case W_BISHOP:
+        case 3:  // BISHOP
             value = BISHOP_VALUE + PST_BISHOP[sq];
             break;
-        case W_ROOK:
+        case 4:  // ROOK
             value = ROOK_VALUE + PST_ROOK[sq];
             break;
-        case W_QUEEN:
+        case 5:  // QUEEN
             value = QUEEN_VALUE + PST_QUEEN[sq];
             break;
-        case W_KING:
+        case 6:  // KING
             value = KING_VALUE + PST_KING[sq];
             break;
         default:
