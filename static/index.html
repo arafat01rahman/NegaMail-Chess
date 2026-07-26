@@ -5,12 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>♟️ NegaMail-Chess - Play Online</title>
     
-    <!-- Load libraries -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <!-- Load chess.js from CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.2/chess.min.js"></script>
     
     <style>
-        /* CSS with embedded piece images as Unicode characters */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', Arial, sans-serif;
@@ -49,7 +47,6 @@
         }
         .subtitle a { color: #f7971e; text-decoration: none; }
         
-        /* Chessboard with Unicode pieces */
         .chessboard {
             display: grid;
             grid-template-columns: repeat(8, 1fr);
@@ -78,8 +75,6 @@
         .square.last-move { background: rgba(155, 199, 0, 0.41); }
         
         .piece { pointer-events: none; line-height: 1; }
-        
-        /* Piece colors */
         .piece-white { color: #fff; text-shadow: 0 0 3px rgba(0,0,0,0.5); }
         .piece-black { color: #000; text-shadow: 0 0 3px rgba(255,255,255,0.3); }
         
@@ -190,19 +185,22 @@
 
     <script>
         // ============================================================
-        // Chess Engine with Unicode Pieces (No external images needed)
+        // Chess Engine with FEN-based rendering (no board() method needed)
         // ============================================================
         
         const API_URL = '/move';
         const ENGINE_DEPTH = 4;
         
-        // ============================================================
-        // Piece Unicode Characters
-        // ============================================================
-        const PIECES = {
-            'w': { 'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙' },
-            'b': { 'K': '♚', 'Q': '♛', 'R': '♜', 'B': '♝', 'N': '♞', 'P': '♟' }
+        // Piece Unicode symbols
+        const UNICODE_PIECES = {
+            'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
+            'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟'
         };
+        
+        // Piece color class
+        function pieceColor(piece) {
+            return (piece === piece.toUpperCase()) ? 'white' : 'black';
+        }
         
         // ============================================================
         // Game State
@@ -228,50 +226,74 @@
         }
         
         // ============================================================
-        // Render Board
+        // Render Board from FEN (works with any chess.js version)
         // ============================================================
         function renderBoard() {
             if (!boardElement || !game) return;
             
             boardElement.innerHTML = '';
-            const board = game.board();
+            const fen = game.fen();
+            const parts = fen.split(' ');
+            const boardStr = parts[0];
             
+            // Parse FEN board
+            const rows = boardStr.split('/');
             // Determine orientation
             const ranks = isFlipped ? [0, 1, 2, 3, 4, 5, 6, 7] : [7, 6, 5, 4, 3, 2, 1, 0];
             
-            for (let rank of ranks) {
-                for (let file = 0; file < 8; file++) {
-                    const square = document.createElement('div');
-                    const isLight = (rank + file) % 2 === 0;
-                    square.className = `square ${isLight ? 'light' : 'dark'}`;
-                    
-                    // Highlight selected square
-                    if (selectedSquare && selectedSquare === file + 8 * rank) {
-                        square.classList.add('selected');
+            for (let rankIndex of ranks) {
+                const row = rows[rankIndex];
+                let fileIndex = 0;
+                for (let i = 0; i < row.length; i++) {
+                    const ch = row[i];
+                    if (ch >= '1' && ch <= '8') {
+                        // Empty squares
+                        const emptyCount = parseInt(ch);
+                        for (let j = 0; j < emptyCount; j++) {
+                            const square = createSquare(rankIndex, fileIndex, null);
+                            boardElement.appendChild(square);
+                            fileIndex++;
+                        }
+                    } else {
+                        // Piece
+                        const square = createSquare(rankIndex, fileIndex, ch);
+                        boardElement.appendChild(square);
+                        fileIndex++;
                     }
-                    
-                    // Highlight legal moves
-                    const squareName = String.fromCharCode(97 + file) + (8 - rank);
-                    if (legalMoves.includes(squareName)) {
-                        square.classList.add('highlight');
-                    }
-                    
-                    // Add piece
-                    const piece = board[rank][file];
-                    if (piece) {
-                        const pieceSpan = document.createElement('span');
-                        const color = piece.color;
-                        const type = piece.type.toUpperCase();
-                        pieceSpan.textContent = PIECES[color][type];
-                        pieceSpan.className = `piece piece-${color}`;
-                        square.appendChild(pieceSpan);
-                    }
-                    
-                    square.dataset.square = squareName;
-                    square.addEventListener('click', () => onSquareClick(squareName));
-                    boardElement.appendChild(square);
                 }
             }
+        }
+        
+        function createSquare(rank, file, pieceChar) {
+            const square = document.createElement('div');
+            const isLight = (rank + file) % 2 === 0;
+            square.className = `square ${isLight ? 'light' : 'dark'}`;
+            
+            // Square name (e.g., "e4")
+            const squareName = String.fromCharCode(97 + file) + (8 - rank);
+            square.dataset.square = squareName;
+            
+            // Highlight selected
+            if (selectedSquare === squareName) {
+                square.classList.add('selected');
+            }
+            
+            // Highlight legal moves
+            if (legalMoves.includes(squareName)) {
+                square.classList.add('highlight');
+            }
+            
+            // Add piece
+            if (pieceChar) {
+                const pieceSpan = document.createElement('span');
+                pieceSpan.textContent = UNICODE_PIECES[pieceChar];
+                const color = pieceChar === pieceChar.toUpperCase() ? 'white' : 'black';
+                pieceSpan.className = `piece piece-${color}`;
+                square.appendChild(pieceSpan);
+            }
+            
+            square.addEventListener('click', () => onSquareClick(squareName));
+            return square;
         }
         
         // ============================================================
@@ -281,18 +303,15 @@
             if (isEngineThinking) return;
             if (game.game_over()) return;
             
-            // Check if there's a piece to select
             const piece = game.get(square);
             
             if (selectedSquare === null) {
-                // Select a piece
                 if (piece && piece.color === game.turn()) {
                     selectedSquare = square;
                     legalMoves = game.moves({ square: square, verbose: true }).map(m => m.to);
                     renderBoard();
                 }
             } else {
-                // Try to move to this square
                 const move = game.move({
                     from: selectedSquare,
                     to: square,
@@ -311,7 +330,6 @@
                         setTimeout(engineMove, 300);
                     }
                 } else {
-                    // If clicking on own piece, select it instead
                     if (piece && piece.color === game.turn()) {
                         selectedSquare = square;
                         legalMoves = game.moves({ square: square, verbose: true }).map(m => m.to);
