@@ -187,3 +187,4 @@ int evaluate(const Board &b)
 
     return score;
 }
+
