@@ -8,7 +8,6 @@ from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import subprocess
 import os
-import json
 import time
 import select
 import signal
@@ -16,28 +15,53 @@ import signal
 app = Flask(__name__, static_folder='static')
 CORS(app)
 
-# Engine configuration
 ENGINE_PATH = './engine'
-ENGINE_TIMEOUT = 5  # seconds (search timeout)
+ENGINE_TOTAL_TIMEOUT = 6.0   # seconds for the entire handshake + search
 
-@app.route('/')
-def home():
-    """Serve the chess board UI"""
-    return send_from_directory('static', 'index.html')
+# ----------------------------------------------------------------------
+# Helper: read a line from a stream with a timeout
+# ----------------------------------------------------------------------
+def read_line_with_timeout(stream, deadline):
+    """
+    Read one line from `stream` using select() to avoid blocking.
+    Raises TimeoutError if deadline is reached, or RuntimeError if EOF.
+    """
+    while time.time() < deadline:
+        rlist, _, _ = select.select([stream], [], [], 0.1)
+        if rlist:
+            line = stream.readline()
+            if not line:          # EOF – process died
+                raise RuntimeError("Engine process exited unexpectedly")
+            return line
+    raise TimeoutError("Timed out waiting for engine output")
 
+# ----------------------------------------------------------------------
+# Helper: send a command and wait for a specific prefix
+# ----------------------------------------------------------------------
+def send_and_wait(engine, cmd, expected_prefix, deadline):
+    """
+    Write `cmd` to engine.stdin, then read lines until one starts with
+    `expected_prefix`.  Raises on timeout or EOF.
+    """
+    engine.stdin.write(cmd + '\n')
+    engine.stdin.flush()
+    while time.time() < deadline:
+        line = read_line_with_timeout(engine.stdout, deadline)
+        if line.startswith(expected_prefix):
+            return line
+    raise TimeoutError(f"Engine did not respond with '{expected_prefix}'")
+
+# ----------------------------------------------------------------------
+# Main move endpoint
+# ----------------------------------------------------------------------
 @app.route('/move', methods=['POST'])
 def get_move():
-    """
-    Get best move from engine
-    Expects: {"fen": "start", "depth": 4}
-    Returns: {"move": "e2e4", "score": 20}
-    """
     data = request.json
     fen = data.get('fen', 'start')
-    depth = data.get('depth', 4)  # default depth 4, but we may reduce to 3 for speed
+    depth = data.get('depth', 4)
 
+    engine = None
     try:
-        # Start engine process
         engine = subprocess.Popen(
             [ENGINE_PATH],
             stdin=subprocess.PIPE,
@@ -47,63 +71,41 @@ def get_move():
             bufsize=1
         )
 
-        def write_cmd(cmd):
-            engine.stdin.write(cmd + '\n')
-            engine.stdin.flush()
+        deadline = time.time() + ENGINE_TOTAL_TIMEOUT
 
-        # --- UCI Handshake ---
-        write_cmd('uci')
-        # Wait for uciok
-        for line in engine.stdout:
-            if line.startswith('uciok'):
-                break
+        # ---- UCI handshake ----
+        send_and_wait(engine, 'uci', 'uciok', deadline)
+        send_and_wait(engine, 'isready', 'readyok', deadline)
 
-        write_cmd('isready')
-        for line in engine.stdout:
-            if line.startswith('readyok'):
-                break
+        # ---- Position ----
+        engine.stdin.write(f'position fen {fen}\n')
+        engine.stdin.flush()
 
-        # --- Send position and go ---
-        write_cmd(f'position fen {fen}')
-        write_cmd(f'go depth {depth}')
+        # ---- Search ----
+        engine.stdin.write(f'go depth {depth}\n')
+        engine.stdin.flush()
 
-        # --- Read result with timeout ---
+        # ---- Read bestmove ----
         bestmove = None
         score = 0
-        start_time = time.time()
-        timeout = ENGINE_TIMEOUT
-
-        while time.time() - start_time < timeout:
-            # Check if stdout has data
-            if select.select([engine.stdout], [], [], 0.1)[0]:
-                line = engine.stdout.readline()
-                if line.startswith('bestmove'):
-                    parts = line.split()
-                    if len(parts) > 1:
-                        bestmove = parts[1]
-                    break
-                elif line.startswith('info score cp'):
-                    parts = line.split()
-                    for i, p in enumerate(parts):
-                        if p == 'cp' and i+1 < len(parts):
-                            try:
-                                score = int(parts[i+1])
-                            except:
-                                pass
-            else:
-                # No output yet, continue
-                continue
-        else:
-            # Timeout reached
-            engine.terminate()
-            engine.wait(timeout=2)
-            return jsonify({'error': 'Engine timeout'}), 500
-
-        engine.terminate()
-        engine.wait(timeout=2)
+        while time.time() < deadline:
+            line = read_line_with_timeout(engine.stdout, deadline)
+            if line.startswith('bestmove'):
+                parts = line.split()
+                if len(parts) > 1:
+                    bestmove = parts[1]
+                break
+            elif line.startswith('info score cp'):
+                parts = line.split()
+                for i, p in enumerate(parts):
+                    if p == 'cp' and i+1 < len(parts):
+                        try:
+                            score = int(parts[i+1])
+                        except ValueError:
+                            pass
 
         if bestmove is None:
-            return jsonify({'error': 'No move found'}), 500
+            raise TimeoutError("No 'bestmove' received from engine")
 
         return jsonify({
             'move': bestmove,
@@ -112,19 +114,33 @@ def get_move():
             'depth': depth
         })
 
-    except subprocess.TimeoutExpired:
-        engine.kill()
-        return jsonify({'error': 'Engine killed due to timeout'}), 500
-    except Exception as e:
+    except (TimeoutError, RuntimeError) as e:
+        app.logger.error(f"Engine error: {e}")
         return jsonify({'error': str(e)}), 500
 
+    except Exception as e:
+        app.logger.exception("Unexpected error in /move")
+        return jsonify({'error': str(e)}), 500
+
+    finally:
+        if engine:
+            engine.terminate()
+            try:
+                engine.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                engine.kill()
+                engine.wait()
+
+# ----------------------------------------------------------------------
+# Analyze endpoint (optional) – same pattern
+# ----------------------------------------------------------------------
 @app.route('/analyze', methods=['POST'])
 def analyze():
-    """Get multiple moves with scores (for analysis) - optional"""
     data = request.json
     fen = data.get('fen', 'start')
     depth = data.get('depth', 4)
 
+    engine = None
     try:
         engine = subprocess.Popen(
             [ENGINE_PATH],
@@ -135,44 +151,48 @@ def analyze():
             bufsize=1
         )
 
-        def write_cmd(cmd):
-            engine.stdin.write(cmd + '\n')
-            engine.stdin.flush()
+        deadline = time.time() + ENGINE_TOTAL_TIMEOUT
+        send_and_wait(engine, 'uci', 'uciok', deadline)
+        send_and_wait(engine, 'isready', 'readyok', deadline)
 
-        write_cmd('uci')
-        for line in engine.stdout:
-            if line.startswith('uciok'):
-                break
+        engine.stdin.write(f'position fen {fen}\n')
+        engine.stdin.flush()
+        engine.stdin.write(f'go depth {depth} movetime 1000\n')
+        engine.stdin.flush()
 
-        write_cmd('isready')
-        for line in engine.stdout:
-            if line.startswith('readyok'):
-                break
-
-        write_cmd(f'position fen {fen}')
-        write_cmd(f'go depth {depth} movetime 1000')
-
-        # Collect bestmove and score
         bestmove = None
-        for line in engine.stdout:
+        while time.time() < deadline:
+            line = read_line_with_timeout(engine.stdout, deadline)
             if line.startswith('bestmove'):
                 parts = line.split()
                 if len(parts) > 1:
                     bestmove = parts[1]
                 break
-            # Could also parse multipv info
-
-        engine.terminate()
-        engine.wait(timeout=2)
 
         return jsonify({'bestmove': bestmove})
 
-    except Exception as e:
+    except (TimeoutError, RuntimeError) as e:
+        app.logger.error(f"Analyze error: {e}")
         return jsonify({'error': str(e)}), 500
 
+    except Exception as e:
+        app.logger.exception("Unexpected error in /analyze")
+        return jsonify({'error': str(e)}), 500
+
+    finally:
+        if engine:
+            engine.terminate()
+            try:
+                engine.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                engine.kill()
+                engine.wait()
+
+# ----------------------------------------------------------------------
+# Health and error handlers
+# ----------------------------------------------------------------------
 @app.route('/health')
 def health():
-    """Health check for Render"""
     return jsonify({'status': 'ok', 'engine': 'NegaMail-Chess'})
 
 @app.errorhandler(404)

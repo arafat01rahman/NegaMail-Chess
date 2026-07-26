@@ -25,5 +25,5 @@ services:
       echo "📦 Installing Python dependencies..."
       pip install -r requirements.txt
       echo "✅ Ready to deploy!"
-    startCommand: gunicorn app:app
+    startCommand: gunicorn app:app --workers 2 --timeout 30   
     healthCheckPath: /health
