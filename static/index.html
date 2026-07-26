@@ -1,12 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>♟️ NegaMail-Chess - Play Online</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.2/chess.min.js"></script>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
             font-family: 'Segoe UI', Arial, sans-serif;
             background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
@@ -17,16 +23,18 @@
             color: #e0e0e0;
             padding: 20px;
         }
+
         .container {
             background: rgba(255, 255, 255, 0.05);
             backdrop-filter: blur(10px);
             border-radius: 20px;
             padding: 30px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
             max-width: 650px;
             width: 100%;
-            border: 1px solid rgba(255,255,255,0.1);
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
+
         h1 {
             text-align: center;
             font-size: 2rem;
@@ -36,13 +44,19 @@
             -webkit-text-fill-color: transparent;
             font-weight: 800;
         }
+
         .subtitle {
             text-align: center;
             color: #888;
             margin-bottom: 20px;
             font-size: 0.9rem;
         }
-        .subtitle a { color: #f7971e; text-decoration: none; }
+
+        .subtitle a {
+            color: #f7971e;
+            text-decoration: none;
+        }
+
         .chessboard {
             display: grid;
             grid-template-columns: repeat(8, 1fr);
@@ -53,6 +67,7 @@
             border-radius: 4px;
             aspect-ratio: 1;
         }
+
         .square {
             aspect-ratio: 1;
             display: flex;
@@ -64,13 +79,38 @@
             user-select: none;
             position: relative;
         }
-        .square.light { background: #f0d9b5; }
-        .square.dark { background: #b58863; }
-        .square.selected { background: #7fc97f; }
-        .square.highlight { background: rgba(255, 255, 100, 0.5); }
-        .piece { pointer-events: none; line-height: 1; }
-        .piece-white { color: #fff; text-shadow: 0 0 3px rgba(0,0,0,0.5); }
-        .piece-black { color: #000; text-shadow: 0 0 3px rgba(255,255,255,0.3); }
+
+        .square.light {
+            background: #f0d9b5;
+        }
+
+        .square.dark {
+            background: #b58863;
+        }
+
+        .square.selected {
+            background: #7fc97f;
+        }
+
+        .square.highlight {
+            background: rgba(255, 255, 100, 0.5);
+        }
+
+        .piece {
+            pointer-events: none;
+            line-height: 1;
+        }
+
+        .piece-white {
+            color: #fff;
+            text-shadow: 0 0 3px rgba(0, 0, 0, 0.5);
+        }
+
+        .piece-black {
+            color: #000;
+            text-shadow: 0 0 3px rgba(255, 255, 255, 0.3);
+        }
+
         .controls {
             display: flex;
             justify-content: center;
@@ -78,6 +118,7 @@
             margin: 15px 0;
             flex-wrap: wrap;
         }
+
         .btn {
             padding: 10px 24px;
             border: none;
@@ -90,21 +131,37 @@
             color: #1a1a2e;
             box-shadow: 0 4px 15px rgba(247, 151, 30, 0.3);
         }
-        .btn:hover { transform: scale(1.02); box-shadow: 0 6px 25px rgba(247, 151, 30, 0.4); }
-        .btn:active { transform: scale(0.98); }
+
+        .btn:hover {
+            transform: scale(1.02);
+            box-shadow: 0 6px 25px rgba(247, 151, 30, 0.4);
+        }
+
+        .btn:active {
+            transform: scale(0.98);
+        }
+
         .btn-secondary {
-            background: rgba(255,255,255,0.1);
+            background: rgba(255, 255, 255, 0.1);
             color: #e0e0e0;
             box-shadow: none;
         }
-        .btn-secondary:hover { background: rgba(255,255,255,0.2); }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
         .status {
             text-align: center;
             font-size: 1.1rem;
             padding: 12px;
             border-radius: 12px;
-            background: rgba(255,255,255,0.05);
+            background: rgba(255, 255, 255, 0.05);
             margin: 10px 0;
             min-height: 50px;
             display: flex;
@@ -112,18 +169,35 @@
             justify-content: center;
             gap: 8px;
         }
-        .status.thinking { color: #ffd700; background: rgba(255, 215, 0, 0.1); }
-        .status.checkmate { color: #ff6b6b; background: rgba(255, 107, 107, 0.1); }
-        .status.draw { color: #ffd93d; background: rgba(255, 217, 61, 0.1); }
+
+        .status.thinking {
+            color: #ffd700;
+            background: rgba(255, 215, 0, 0.1);
+        }
+
+        .status.checkmate {
+            color: #ff6b6b;
+            background: rgba(255, 107, 107, 0.1);
+        }
+
+        .status.draw {
+            color: #ffd93d;
+            background: rgba(255, 217, 61, 0.1);
+        }
+
         .engine-info {
             text-align: center;
             font-size: 0.8rem;
             color: #666;
             margin-top: 15px;
-            border-top: 1px solid rgba(255,255,255,0.05);
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
             padding-top: 15px;
         }
-        .engine-info span { color: #ffd700; }
+
+        .engine-info span {
+            color: #ffd700;
+        }
+
         .move-history {
             max-height: 80px;
             overflow-y: auto;
@@ -131,22 +205,46 @@
             color: #888;
             text-align: center;
             font-family: monospace;
-            background: rgba(0,0,0,0.2);
+            background: rgba(0, 0, 0, 0.2);
             border-radius: 8px;
             padding: 8px;
             margin-top: 10px;
         }
-        .move-history::-webkit-scrollbar { width: 4px; }
-        .move-history::-webkit-scrollbar-thumb { background: #f7971e; border-radius: 4px; }
+
+        .move-history::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .move-history::-webkit-scrollbar-thumb {
+            background: #f7971e;
+            border-radius: 4px;
+        }
+
         @media (max-width: 480px) {
-            .container { padding: 15px; }
-            h1 { font-size: 1.5rem; }
-            .btn { padding: 8px 16px; font-size: 0.85rem; }
-            .chessboard { width: 300px; }
-            .square { font-size: 1.6rem; }
+            .container {
+                padding: 15px;
+            }
+
+            h1 {
+                font-size: 1.5rem;
+            }
+
+            .btn {
+                padding: 8px 16px;
+                font-size: 0.85rem;
+            }
+
+            .chessboard {
+                width: 300px;
+            }
+
+            .square {
+                font-size: 1.6rem;
+            }
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <h1>♟️ NegaMail-Chess</h1>
@@ -155,20 +253,20 @@
             <span style="margin: 0 8px;">·</span>
             <span>by <a href="https://github.com/arafat01rahman" target="_blank">ARAFAT</a></span>
         </div>
-        
+
         <div id="board-container">
             <div id="board" class="chessboard"></div>
         </div>
-        
+
         <div class="controls">
             <button class="btn" onclick="resetGame()">🔄 New Game</button>
             <button class="btn btn-secondary" onclick="flipBoard()">🔄 Flip Board</button>
             <button class="btn btn-secondary" id="engineMoveBtn" onclick="engineMove()">🤖 Engine Move</button>
         </div>
-        
+
         <div class="status" id="status">⚪ Your turn (White)</div>
         <div class="move-history" id="moveHistory">Moves: —</div>
-        
+
         <div class="engine-info">
             ⚡ Server: Render.com · 24/7 Online · <span id="engineStatus">Ready</span>
         </div>
@@ -178,18 +276,18 @@
         // ============================================================
         // Human vs Engine – Human plays White, Engine plays Black
         // ============================================================
-        
+
         const API_URL = '/move';
         const ENGINE_DEPTH = 3;
         const HUMAN_COLOR = 'w';    // Human plays White
         const ENGINE_COLOR = 'b';   // Engine plays Black
-        
+
         // Piece Unicode symbols
         const UNICODE_PIECES = {
             'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
             'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟'
         };
-        
+
         // ============================================================
         // Game State
         // ============================================================
@@ -200,7 +298,7 @@
         let selectedSquare = null;
         let legalMoves = [];
         let boardElement = null;
-        
+
         // ============================================================
         // Initialize Board
         // ============================================================
@@ -213,7 +311,7 @@
             document.getElementById('engineMoveBtn').disabled = false;
             console.log('✅ Board initialized – Human plays White, Engine plays Black');
         }
-        
+
         // ============================================================
         // Render Board from FEN
         // ============================================================
@@ -225,7 +323,7 @@
             const boardStr = parts[0];
             const rows = boardStr.split('/');
             const ranks = isFlipped ? [0, 1, 2, 3, 4, 5, 6, 7] : [7, 6, 5, 4, 3, 2, 1, 0];
-            
+
             for (let rankIndex of ranks) {
                 const row = rows[rankIndex];
                 let fileIndex = 0;
@@ -246,17 +344,17 @@
                 }
             }
         }
-        
+
         function createSquare(rank, file, pieceChar) {
             const square = document.createElement('div');
             const isLight = (rank + file) % 2 === 0;
             square.className = `square ${isLight ? 'light' : 'dark'}`;
             const squareName = String.fromCharCode(97 + file) + (8 - rank);
             square.dataset.square = squareName;
-            
+
             if (selectedSquare === squareName) square.classList.add('selected');
             if (legalMoves.includes(squareName)) square.classList.add('highlight');
-            
+
             if (pieceChar) {
                 const pieceSpan = document.createElement('span');
                 pieceSpan.textContent = UNICODE_PIECES[pieceChar];
@@ -264,11 +362,11 @@
                 pieceSpan.className = `piece piece-${color}`;
                 square.appendChild(pieceSpan);
             }
-            
+
             square.addEventListener('click', () => onSquareClick(squareName));
             return square;
         }
-        
+
         // ============================================================
         // Square Click – Only allow human's pieces
         // ============================================================
@@ -277,9 +375,9 @@
             if (game.game_over()) return;
             // Only allow moves when it's human's turn
             if (game.turn() !== HUMAN_COLOR) return;
-            
+
             const piece = game.get(square);
-            
+
             if (selectedSquare === null) {
                 // Select only if the piece belongs to the human
                 if (piece && piece.color === HUMAN_COLOR) {
@@ -294,7 +392,7 @@
                     to: square,
                     promotion: 'q'
                 });
-                
+
                 if (move) {
                     moveHistory.push(move.san);
                     selectedSquare = null;
@@ -302,7 +400,7 @@
                     renderBoard();
                     updateStatus();
                     updateMoveHistory();
-                    
+
                     // After human move, engine moves (if not game over)
                     if (!game.game_over()) {
                         setTimeout(engineMove, 300);
@@ -321,7 +419,7 @@
                 }
             }
         }
-        
+
         // ============================================================
         // Engine Move – Only when it's engine's turn
         // ============================================================
@@ -334,14 +432,14 @@
                 document.getElementById('status').textContent = '⏳ It\'s your turn!';
                 return;
             }
-            
+
             isEngineThinking = true;
             const status = document.getElementById('status');
             status.textContent = '🤔 Engine thinking...';
             status.className = 'status thinking';
             document.getElementById('engineStatus').textContent = 'Thinking...';
             document.getElementById('engineMoveBtn').disabled = true;
-            
+
             try {
                 const response = await fetch(API_URL, {
                     method: 'POST',
@@ -351,9 +449,9 @@
                         depth: ENGINE_DEPTH
                     })
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.error) {
                     status.textContent = '❌ ' + data.error;
                     status.className = 'status';
@@ -362,7 +460,7 @@
                     document.getElementById('engineMoveBtn').disabled = false;
                     return;
                 }
-                
+
                 if (data.move) {
                     const move = game.move(data.move);
                     if (move) {
@@ -374,37 +472,34 @@
                         updateMoveHistory();
                     }
                 }
-                
+
                 if (data.score !== undefined) {
                     const scoreStr = data.score > 0 ? '+' + data.score / 100 : data.score / 100;
                     document.getElementById('engineStatus').textContent = `Score: ${scoreStr}`;
                 }
-                
+
             } catch (error) {
                 console.error('API Error:', error);
                 status.textContent = '❌ Connection error!';
                 status.className = 'status';
                 document.getElementById('engineStatus').textContent = 'Offline';
-            }
-            
-            isEngineThinking = false;
-            document.getElementById('engineMoveBtn').disabled = false;
-            if (!game.game_over()) {
-                document.getElementById('engineStatus').textContent = 'Ready';
-                // If it's human's turn, update status
-                if (game.turn() === HUMAN_COLOR) {
-                    status.textContent = '♟️ Your turn';
-                    status.className = 'status';
+
+                // Try to read error from response if possible
+                if (error.response) {
+                    error.response.text().then(text => {
+                        console.error('Server response:', text);
+                        status.textContent = '❌ Server error: ' + text.slice(0, 100);
+                    });
                 }
             }
         }
-        
+
         // ============================================================
         // UI Updates
         // ============================================================
         function updateStatus() {
             const status = document.getElementById('status');
-            
+
             if (game.in_checkmate()) {
                 const winner = game.turn() === 'w' ? 'Black' : 'White';
                 status.textContent = `🏆 Checkmate! ${winner} wins!`;
@@ -413,7 +508,7 @@
                 document.getElementById('engineMoveBtn').disabled = true;
                 return;
             }
-            
+
             if (game.in_draw()) {
                 status.textContent = '🤝 Draw!';
                 status.className = 'status draw';
@@ -421,7 +516,7 @@
                 document.getElementById('engineMoveBtn').disabled = true;
                 return;
             }
-            
+
             if (game.turn() === HUMAN_COLOR) {
                 status.textContent = '♟️ Your turn (White)';
                 status.className = 'status';
@@ -438,7 +533,7 @@
                 }
             }
         }
-        
+
         function updateMoveHistory() {
             const el = document.getElementById('moveHistory');
             if (moveHistory.length === 0) {
@@ -447,13 +542,13 @@
             }
             let html = 'Moves: ';
             for (let i = 0; i < moveHistory.length; i++) {
-                if (i % 2 === 0) html += `${Math.floor(i/2) + 1}. `;
+                if (i % 2 === 0) html += `${Math.floor(i / 2) + 1}. `;
                 html += `${moveHistory[i]} `;
             }
             el.textContent = html;
             el.scrollTop = el.scrollHeight;
         }
-        
+
         // ============================================================
         // Controls
         // ============================================================
@@ -469,14 +564,14 @@
             document.getElementById('engineStatus').textContent = 'Ready';
             document.getElementById('engineMoveBtn').disabled = false;
         }
-        
+
         function flipBoard() {
             isFlipped = !isFlipped;
             selectedSquare = null;
             legalMoves = [];
             renderBoard();
         }
-        
+
         // ============================================================
         // Keyboard Shortcuts
         // ============================================================
@@ -488,14 +583,15 @@
                 engineMove();
             }
         });
-        
+
         // ============================================================
         // Start
         // ============================================================
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             console.log('📦 DOM loaded, initializing...');
             initBoard();
         });
     </script>
 </body>
+
 </html>

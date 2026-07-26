@@ -12,13 +12,14 @@ import time
 import select
 import signal
 import sys
+import traceback
 
 app = Flask(__name__, static_folder='static')
 CORS(app)
 
-# Absolute path to engine binary (runs from repo root)
+# Absolute path to engine binary
 ENGINE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'engine')
-ENGINE_TOTAL_TIMEOUT = 10.0   # seconds – increased for free tier
+ENGINE_TOTAL_TIMEOUT = 15.0   # seconds – increased for free tier
 
 # ----------------------------------------------------------------------
 # Helper: read a line from a stream with a timeout
@@ -68,7 +69,7 @@ def get_move():
             [ENGINE_PATH],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,   # <-- KEY FIX
+            stderr=subprocess.STDOUT,
             text=True,
             bufsize=1
         )
@@ -124,7 +125,8 @@ def get_move():
 
     except (TimeoutError, RuntimeError) as e:
         app.logger.error(f"Engine error: {e}")
-        # If we have any leftover output, log it
+        # Collect any leftover output for debugging
+        leftover = ""
         if engine and engine.stdout:
             try:
                 leftover = engine.stdout.read()
@@ -132,11 +134,11 @@ def get_move():
                     app.logger.error(f"Engine leftover output: {leftover}")
             except Exception:
                 pass
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': str(e), 'leftover': leftover}), 500
 
     except Exception as e:
         app.logger.exception("Unexpected error in /move")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': f"Unexpected error: {str(e)}", 'trace': traceback.format_exc()}), 500
 
     finally:
         if engine:
@@ -148,7 +150,7 @@ def get_move():
                 engine.wait()
 
 # ----------------------------------------------------------------------
-# Analyze endpoint (optional) – same pattern
+# Analyze endpoint (optional)
 # ----------------------------------------------------------------------
 @app.route('/analyze', methods=['POST'])
 def analyze():
@@ -204,7 +206,15 @@ def analyze():
                 engine.wait()
 
 # ----------------------------------------------------------------------
-# Health and error handlers
+# Global exception handler – ensures JSON errors
+# ----------------------------------------------------------------------
+@app.errorhandler(Exception)
+def handle_exception(e):
+    app.logger.exception("Unhandled exception")
+    return jsonify({'error': str(e)}), 500
+
+# ----------------------------------------------------------------------
+# Health and other routes
 # ----------------------------------------------------------------------
 @app.route('/health')
 def health():
@@ -214,9 +224,6 @@ def health():
 def not_found(e):
     return jsonify({'error': 'Not found'}), 404
 
-# ----------------------------------------------------------------------
-# HOME ROUTE – serves index.html from static/ folder
-# ----------------------------------------------------------------------
 @app.route('/')
 def home():
     return app.send_static_file('index.html')
