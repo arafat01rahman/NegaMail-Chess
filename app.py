@@ -151,13 +151,21 @@ def find_best_move(board, depth=3):
     """Returns the best move in UCI format."""
     if board.is_game_over():
         return None
+
+    is_white_to_move = board.turn == chess.WHITE
     best_move = None
-    best_score = -999999
+    if is_white_to_move:
+        best_score = -999999
+        compare = lambda score, best: score > best
+    else:
+        best_score = 999999
+        compare = lambda score, best: score < best
+
     for move in board.legal_moves:
         board.push(move)
-        score = minimax(board, depth-1, -999999, 999999, False)
+        score = minimax(board, depth-1, -999999, 999999, not is_white_to_move)
         board.pop()
-        if score > best_score:
+        if compare(score, best_score):
             best_score = score
             best_move = move
     return best_move
