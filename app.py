@@ -11,12 +11,13 @@ import os
 import time
 import select
 import signal
+import sys
 
 app = Flask(__name__, static_folder='static')
 CORS(app)
 
 ENGINE_PATH = './engine'
-ENGINE_TOTAL_TIMEOUT = 6.0   # seconds for the entire handshake + search
+ENGINE_TOTAL_TIMEOUT = 10.0   # seconds – increased from 6
 
 # ----------------------------------------------------------------------
 # Helper: read a line from a stream with a timeout
@@ -31,7 +32,7 @@ def read_line_with_timeout(stream, deadline):
         if rlist:
             line = stream.readline()
             if not line:          # EOF – process died
-                raise RuntimeError("Engine process exited unexpectedly")
+                raise RuntimeError("Engine process exited unexpectedly (EOF)")
             return line
     raise TimeoutError("Timed out waiting for engine output")
 
@@ -58,7 +59,7 @@ def send_and_wait(engine, cmd, expected_prefix, deadline):
 def get_move():
     data = request.json
     fen = data.get('fen', 'start')
-    depth = data.get('depth', 4)
+    depth = data.get('depth', 3)        # default depth 3 (faster)
 
     engine = None
     try:
@@ -73,9 +74,13 @@ def get_move():
 
         deadline = time.time() + ENGINE_TOTAL_TIMEOUT
 
+        app.logger.info(f"Starting UCI handshake for fen={fen} depth={depth}")
+
         # ---- UCI handshake ----
         send_and_wait(engine, 'uci', 'uciok', deadline)
+        app.logger.info("Received uciok")
         send_and_wait(engine, 'isready', 'readyok', deadline)
+        app.logger.info("Received readyok")
 
         # ---- Position ----
         engine.stdin.write(f'position fen {fen}\n')
@@ -84,6 +89,7 @@ def get_move():
         # ---- Search ----
         engine.stdin.write(f'go depth {depth}\n')
         engine.stdin.flush()
+        app.logger.info(f"Search started (depth {depth})")
 
         # ---- Read bestmove ----
         bestmove = None
@@ -94,6 +100,7 @@ def get_move():
                 parts = line.split()
                 if len(parts) > 1:
                     bestmove = parts[1]
+                app.logger.info(f"Received bestmove: {bestmove}")
                 break
             elif line.startswith('info score cp'):
                 parts = line.split()
@@ -138,7 +145,7 @@ def get_move():
 def analyze():
     data = request.json
     fen = data.get('fen', 'start')
-    depth = data.get('depth', 4)
+    depth = data.get('depth', 3)
 
     engine = None
     try:

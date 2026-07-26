@@ -180,7 +180,7 @@
         // ============================================================
         
         const API_URL = '/move';
-        const ENGINE_DEPTH = 4;
+        const ENGINE_DEPTH = 3;
         const HUMAN_COLOR = 'w';    // Human plays White
         const ENGINE_COLOR = 'b';   // Engine plays Black
         
@@ -195,7 +195,7 @@
         // ============================================================
         let game = null;
         let isEngineThinking = false;
-        let isFlipped = false;
+        let isFlipped = true;
         let moveHistory = [];
         let selectedSquare = null;
         let legalMoves = [];
