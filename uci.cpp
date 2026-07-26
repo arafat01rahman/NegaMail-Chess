@@ -14,7 +14,7 @@
  *
  * Author: ARAFAT
  * Date: Sun 26 JULY 2026
- * License: Open source 
+ * License: Open source
  */
 
 /*
@@ -73,10 +73,14 @@ Move uci_to_move(const std::string &uci, Board &b)
     {
         char p = uci[4];
         int color = b.side_to_move;
-        if (p == 'q') promo = (color == 1) ? W_QUEEN : B_QUEEN;
-        else if (p == 'r') promo = (color == 1) ? W_ROOK : B_ROOK;
-        else if (p == 'b') promo = (color == 1) ? W_BISHOP : B_BISHOP;
-        else if (p == 'n') promo = (color == 1) ? W_KNIGHT : B_KNIGHT;
+        if (p == 'q')
+            promo = (color == 1) ? W_QUEEN : B_QUEEN;
+        else if (p == 'r')
+            promo = (color == 1) ? W_ROOK : B_ROOK;
+        else if (p == 'b')
+            promo = (color == 1) ? W_BISHOP : B_BISHOP;
+        else if (p == 'n')
+            promo = (color == 1) ? W_KNIGHT : B_KNIGHT;
     }
 
     for (const Move &m : moves)
@@ -99,6 +103,13 @@ Move uci_to_move(const std::string &uci, Board &b)
 
 void parse_fen(Board &b, const std::string &fen)
 {
+    // If fen is "startpos", just set up the starting position
+    if (fen == "startpos")
+    {
+        init_starting_position(b);
+        return;
+    }
+
     clear_board(b);
     std::istringstream iss(fen);
     std::string piece_placement;
@@ -120,40 +131,83 @@ void parse_fen(Board &b, const std::string &fen)
         else
         {
             int piece = 0;
-            switch(c)
+            switch (c)
             {
-                case 'P': piece = W_PAWN; break;
-                case 'N': piece = W_KNIGHT; break;
-                case 'B': piece = W_BISHOP; break;
-                case 'R': piece = W_ROOK; break;
-                case 'Q': piece = W_QUEEN; break;
-                case 'K': piece = W_KING; break;
-                case 'p': piece = B_PAWN; break;
-                case 'n': piece = B_KNIGHT; break;
-                case 'b': piece = B_BISHOP; break;
-                case 'r': piece = B_ROOK; break;
-                case 'q': piece = B_QUEEN; break;
-                case 'k': piece = B_KING; break;
+            case 'P':
+                piece = W_PAWN;
+                break;
+            case 'N':
+                piece = W_KNIGHT;
+                break;
+            case 'B':
+                piece = W_BISHOP;
+                break;
+            case 'R':
+                piece = W_ROOK;
+                break;
+            case 'Q':
+                piece = W_QUEEN;
+                break;
+            case 'K':
+                piece = W_KING;
+                break;
+            case 'p':
+                piece = B_PAWN;
+                break;
+            case 'n':
+                piece = B_KNIGHT;
+                break;
+            case 'b':
+                piece = B_BISHOP;
+                break;
+            case 'r':
+                piece = B_ROOK;
+                break;
+            case 'q':
+                piece = B_QUEEN;
+                break;
+            case 'k':
+                piece = B_KING;
+                break;
             }
-            int sq = rank * 16 + file;
-            b.squares[sq] = piece;
+            if (piece != 0)
+            {
+                int sq = rank * 16 + file;
+                b.squares[sq] = piece;
+            }
             file++;
         }
     }
 
     std::string side, castling, ep;
-    iss >> side >> castling >> ep;
+    if (!(iss >> side))
+        side = "w";
+    if (!(iss >> castling))
+        castling = "-";
+    if (!(iss >> ep))
+        ep = "-";
+
     b.side_to_move = (side == "w") ? 1 : -1;
 
     b.castling_rights = 0;
-    if (castling.find('K') != std::string::npos) b.castling_rights |= 1;
-    if (castling.find('Q') != std::string::npos) b.castling_rights |= 2;
-    if (castling.find('k') != std::string::npos) b.castling_rights |= 4;
-    if (castling.find('q') != std::string::npos) b.castling_rights |= 8;
+    if (castling.find('K') != std::string::npos)
+        b.castling_rights |= 1;
+    if (castling.find('Q') != std::string::npos)
+        b.castling_rights |= 2;
+    if (castling.find('k') != std::string::npos)
+        b.castling_rights |= 4;
+    if (castling.find('q') != std::string::npos)
+        b.castling_rights |= 8;
 
-    b.en_passant_square = (ep == "-") ? -1 : uci_to_square(ep);
-
-    // Ignore halfmove and fullmove clocks (we don't use them)
+    // Guard against empty ep string
+    if (ep.empty() || ep == "-")
+    {
+        b.en_passant_square = -1;
+    }
+    else
+    {
+        b.en_passant_square = uci_to_square(ep);
+    }
 }
 
 void uci_loop()
@@ -191,7 +245,8 @@ void uci_loop()
                     while (iss >> move_str)
                     {
                         Move m = uci_to_move(move_str, b);
-                        if (m.from != -1) make_move(b, m);
+                        if (m.from != -1)
+                            make_move(b, m);
                     }
                 }
             }
@@ -201,9 +256,11 @@ void uci_loop()
                 for (int i = 0; i < 6; i++)
                 {
                     std::string part;
-                    if (!(iss >> part)) break;
+                    if (!(iss >> part))
+                        break;
                     fen += part;
-                    if (i < 5) fen += " ";
+                    if (i < 5)
+                        fen += " ";
                 }
                 parse_fen(b, fen);
                 if (iss >> token && token == "moves")
@@ -212,7 +269,8 @@ void uci_loop()
                     while (iss >> move_str)
                     {
                         Move m = uci_to_move(move_str, b);
-                        if (m.from != -1) make_move(b, m);
+                        if (m.from != -1)
+                            make_move(b, m);
                     }
                 }
             }
@@ -222,9 +280,16 @@ void uci_loop()
             int depth = 4;
             while (iss >> token)
             {
-                if (token == "depth") iss >> depth;
-                else if (token == "movetime") { int mt; iss >> mt; }
-                else if (token == "infinite") { /* ignore */ }
+                if (token == "depth")
+                    iss >> depth;
+                else if (token == "movetime")
+                {
+                    int mt;
+                    iss >> mt;
+                }
+                else if (token == "infinite")
+                { /* ignore */
+                }
             }
             stop_search = false;
             Move best = find_best_move(b, depth);

@@ -17,7 +17,7 @@ app = Flask(__name__, static_folder='static')
 CORS(app)
 
 ENGINE_PATH = './engine'
-ENGINE_TOTAL_TIMEOUT = 10.0   # seconds – increased from 6
+ENGINE_TOTAL_TIMEOUT = 6.0   # seconds for entire handshake + search
 
 # ----------------------------------------------------------------------
 # Helper: read a line from a stream with a timeout
@@ -59,7 +59,8 @@ def send_and_wait(engine, cmd, expected_prefix, deadline):
 def get_move():
     data = request.json
     fen = data.get('fen', 'start')
-    depth = data.get('depth', 3)        # default depth 3 (faster)
+    # depth is ignored; we use movetime for speed
+    # but keep for compatibility
 
     engine = None
     try:
@@ -74,7 +75,7 @@ def get_move():
 
         deadline = time.time() + ENGINE_TOTAL_TIMEOUT
 
-        app.logger.info(f"Starting UCI handshake for fen={fen} depth={depth}")
+        app.logger.info(f"Starting UCI handshake for fen={fen}")
 
         # ---- UCI handshake ----
         send_and_wait(engine, 'uci', 'uciok', deadline)
@@ -86,10 +87,10 @@ def get_move():
         engine.stdin.write(f'position fen {fen}\n')
         engine.stdin.flush()
 
-        # ---- Search ----
-        engine.stdin.write(f'go depth {depth}\n')
+        # ---- Search with time control (3 seconds max) ----
+        engine.stdin.write(f'go movetime 3000\n')
         engine.stdin.flush()
-        app.logger.info(f"Search started (depth {depth})")
+        app.logger.info("Search started (movetime 3000ms)")
 
         # ---- Read bestmove ----
         bestmove = None
@@ -118,7 +119,7 @@ def get_move():
             'move': bestmove,
             'score': score,
             'fen': fen,
-            'depth': depth
+            'depth': 0   # not applicable, but keep
         })
 
     except (TimeoutError, RuntimeError) as e:
@@ -145,7 +146,6 @@ def get_move():
 def analyze():
     data = request.json
     fen = data.get('fen', 'start')
-    depth = data.get('depth', 3)
 
     engine = None
     try:
@@ -164,7 +164,7 @@ def analyze():
 
         engine.stdin.write(f'position fen {fen}\n')
         engine.stdin.flush()
-        engine.stdin.write(f'go depth {depth} movetime 1000\n')
+        engine.stdin.write(f'go movetime 2000\n')   # 2s for analysis
         engine.stdin.flush()
 
         bestmove = None
