@@ -16,8 +16,9 @@ import sys
 app = Flask(__name__, static_folder='static')
 CORS(app)
 
-ENGINE_PATH = './engine'
-ENGINE_TOTAL_TIMEOUT = 6.0   # seconds for entire handshake + search
+# Absolute path to engine binary (runs from repo root)
+ENGINE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'engine')
+ENGINE_TOTAL_TIMEOUT = 10.0   # seconds – increased for free tier
 
 # ----------------------------------------------------------------------
 # Helper: read a line from a stream with a timeout
@@ -59,16 +60,15 @@ def send_and_wait(engine, cmd, expected_prefix, deadline):
 def get_move():
     data = request.json
     fen = data.get('fen', 'start')
-    # depth is ignored; we use movetime for speed
-    # but keep for compatibility
 
     engine = None
     try:
+        # Start engine with stderr merged into stdout to avoid deadlock
         engine = subprocess.Popen(
             [ENGINE_PATH],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stderr=subprocess.STDOUT,   # <-- KEY FIX
             text=True,
             bufsize=1
         )
@@ -119,11 +119,19 @@ def get_move():
             'move': bestmove,
             'score': score,
             'fen': fen,
-            'depth': 0   # not applicable, but keep
+            'depth': 0
         })
 
     except (TimeoutError, RuntimeError) as e:
         app.logger.error(f"Engine error: {e}")
+        # If we have any leftover output, log it
+        if engine and engine.stdout:
+            try:
+                leftover = engine.stdout.read()
+                if leftover:
+                    app.logger.error(f"Engine leftover output: {leftover}")
+            except Exception:
+                pass
         return jsonify({'error': str(e)}), 500
 
     except Exception as e:
@@ -153,7 +161,7 @@ def analyze():
             [ENGINE_PATH],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             text=True,
             bufsize=1
         )
@@ -164,7 +172,7 @@ def analyze():
 
         engine.stdin.write(f'position fen {fen}\n')
         engine.stdin.flush()
-        engine.stdin.write(f'go movetime 2000\n')   # 2s for analysis
+        engine.stdin.write(f'go movetime 2000\n')
         engine.stdin.flush()
 
         bestmove = None
