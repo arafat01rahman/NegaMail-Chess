@@ -450,19 +450,30 @@
                     })
                 });
 
+                if (!response.ok) {
+                    const text = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${text}`);
+                }
+
                 const data = await response.json();
 
                 if (data.error) {
                     status.textContent = '❌ ' + data.error;
                     status.className = 'status';
-                    isEngineThinking = false;
                     document.getElementById('engineStatus').textContent = 'Error';
-                    document.getElementById('engineMoveBtn').disabled = false;
                     return;
                 }
 
                 if (data.move) {
-                    const move = game.move(data.move);
+                    let move = game.move(data.move);
+                    if (!move && typeof data.move === 'string' && data.move.length >= 4) {
+                        move = game.move({
+                            from: data.move.slice(0, 2),
+                            to: data.move.slice(2, 4),
+                            promotion: 'q'
+                        });
+                    }
+
                     if (move) {
                         moveHistory.push(move.san);
                         selectedSquare = null;
@@ -470,7 +481,17 @@
                         renderBoard();
                         updateStatus();
                         updateMoveHistory();
+                    } else {
+                        status.textContent = '❌ Invalid engine move';
+                        status.className = 'status';
+                        document.getElementById('engineStatus').textContent = 'Error';
+                        return;
                     }
+                } else {
+                    status.textContent = '❌ No move returned';
+                    status.className = 'status';
+                    document.getElementById('engineStatus').textContent = 'Error';
+                    return;
                 }
 
                 if (data.score !== undefined) {
