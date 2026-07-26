@@ -5,15 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>♟️ NegaMail-Chess - Play Online</title>
     
-    <!-- IMPORTANT: Load jQuery FIRST -->
+    <!-- 1. jQuery (required by chessboardjs) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
     
-    <!-- Then load chessboardjs (which requires jQuery) -->
+    <!-- 2. chessboardjs -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
     
-    <!-- Then chess.js -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/1.0.0-beta.4/chess.min.js"></script>
+    <!-- 3. chess.js - CORRECT VERSION -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.2/chess.min.js"></script>
     
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -181,16 +181,31 @@
         let isEngineThinking = false;
         let isFlipped = false;
         let moveHistory = [];
+        let boardInitialized = false;
         
         // ============================================================
         // Initialize Board
         // ============================================================
         function initBoard() {
             try {
-                // Make sure jQuery is loaded
+                // Check if jQuery is loaded
                 if (typeof $ === 'undefined') {
                     console.error('❌ jQuery not loaded!');
                     document.getElementById('status').textContent = '❌ Error: jQuery not loaded';
+                    return;
+                }
+                
+                // Check if Chess is loaded
+                if (typeof Chess === 'undefined') {
+                    console.error('❌ Chess.js not loaded!');
+                    document.getElementById('status').textContent = '❌ Error: Chess library not loaded';
+                    return;
+                }
+                
+                // Check if Chessboard is loaded
+                if (typeof Chessboard === 'undefined') {
+                    console.error('❌ Chessboard not loaded!');
+                    document.getElementById('status').textContent = '❌ Error: Chessboard library not loaded';
                     return;
                 }
                 
@@ -205,13 +220,14 @@
                 
                 board = Chessboard('board', config);
                 game = new Chess();
+                boardInitialized = true;
                 updateStatus();
                 updateMoveHistory();
                 console.log('✅ Board initialized successfully!');
                 
             } catch (error) {
                 console.error('❌ Error initializing board:', error);
-                document.getElementById('status').textContent = '❌ Error loading chess board. Please refresh.';
+                document.getElementById('status').textContent = '❌ Error loading chess board: ' + error.message;
             }
         }
         
@@ -219,6 +235,7 @@
         // Drag & Drop Handlers
         // ============================================================
         function onDragStart(source, piece) {
+            if (!boardInitialized) return false;
             if (isEngineThinking) return false;
             if (game.game_over()) return false;
             if (game.turn() !== piece.charAt(0)) return false;
@@ -226,6 +243,8 @@
         }
         
         function onDrop(source, target) {
+            if (!boardInitialized) return 'snapback';
+            
             try {
                 const move = game.move({
                     from: source,
@@ -243,6 +262,7 @@
                 if (!game.game_over()) {
                     setTimeout(engineMove, 300);
                 }
+                return;
             } catch (error) {
                 console.error('Move error:', error);
                 return 'snapback';
@@ -250,16 +270,18 @@
         }
         
         function onSnapEnd() {
-            if (board) board.position(game.fen());
+            if (board && boardInitialized) {
+                board.position(game.fen());
+            }
         }
         
         // ============================================================
         // Engine Move
         // ============================================================
         async function engineMove() {
+            if (!boardInitialized) return;
             if (isEngineThinking) return;
             if (game.game_over()) return;
-            if (!board) return;
             
             isEngineThinking = true;
             const status = document.getElementById('status');
@@ -320,6 +342,8 @@
         // UI Updates
         // ============================================================
         function updateStatus() {
+            if (!game) return;
+            
             const status = document.getElementById('status');
             
             if (game.in_checkmate()) {
@@ -365,7 +389,10 @@
         // Controls
         // ============================================================
         function resetGame() {
-            if (!board) return;
+            if (!boardInitialized) {
+                initBoard();
+                return;
+            }
             game = new Chess();
             board.position('start');
             moveHistory = [];
@@ -376,7 +403,7 @@
         }
         
         function flipBoard() {
-            if (!board) return;
+            if (!board || !boardInitialized) return;
             isFlipped = !isFlipped;
             board.flip();
         }
@@ -396,18 +423,26 @@
         // ============================================================
         // Start - Wait for all scripts to load
         // ============================================================
-        function waitForJQuery(callback) {
-            if (typeof $ !== 'undefined') {
+        function waitForLibraries(callback, attempts) {
+            attempts = attempts || 0;
+            if (attempts > 50) {
+                console.error('❌ Libraries failed to load after 5 seconds');
+                document.getElementById('status').textContent = '❌ Error: Libraries failed to load';
+                return;
+            }
+            
+            if (typeof $ !== 'undefined' && typeof Chess !== 'undefined' && typeof Chessboard !== 'undefined') {
                 callback();
             } else {
-                setTimeout(function() { waitForJQuery(callback); }, 100);
+                console.log(`⏳ Waiting for libraries... (attempt ${attempts + 1})`);
+                setTimeout(function() { waitForLibraries(callback, attempts + 1); }, 100);
             }
         }
         
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('📦 DOM loaded, waiting for jQuery...');
-            waitForJQuery(function() {
-                console.log('✅ jQuery loaded, initializing board...');
+            console.log('📦 DOM loaded, waiting for libraries...');
+            waitForLibraries(function() {
+                console.log('✅ All libraries loaded, initializing board...');
                 initBoard();
             });
         });
