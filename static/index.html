@@ -343,6 +343,8 @@
                     }
                 }
             }
+            // Ensure status reflects final position (checkmate/draw detection)
+            try { updateStatus(); } catch (e) { console.error('updateStatus error:', e); }
         }
 
         function createSquare(rank, file, pieceChar) {
