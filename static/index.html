@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>♟️ NegaMail-Chess - Play Online</title>
+    <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+    <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.2/chess.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #e0e0e0;
+            padding: 20px;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            max-width: 600px;
+            width: 100%;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        h1 {
+            text-align: center;
+            font-size: 2rem;
+            margin-bottom: 5px;
+            background: linear-gradient(135deg, #f7971e, #ffd200);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 800;
+        }
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+        }
+        .subtitle a {
+            color: #f7971e;
+            text-decoration: none;
+        }
+        #board {
+            display: flex;
+            justify-content: center;
+            margin: 10px 0;
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin: 15px 0;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 10px 24px;
+            border: none;
+            border-radius: 12px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: linear-gradient(135deg, #f7971e, #ffd200);
+            color: #1a1a2e;
+            box-shadow: 0 4px 15px rgba(247, 151, 30, 0.3);
+        }
+        .btn:hover { transform: scale(1.02); box-shadow: 0 6px 25px rgba(247, 151, 30, 0.4); }
+        .btn:active { transform: scale(0.98); }
+        .btn-secondary {
+            background: rgba(255,255,255,0.1);
+            color: #e0e0e0;
+            box-shadow: none;
+        }
+        .btn-secondary:hover { background: rgba(255,255,255,0.2); }
+        .status {
+            text-align: center;
+            font-size: 1.1rem;
+            padding: 12px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.05);
+            margin: 10px 0;
+            min-height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .status.thinking { color: #ffd700; background: rgba(255, 215, 0, 0.1); }
+        .status.checkmate { color: #ff6b6b; background: rgba(255, 107, 107, 0.1); }
+        .status.draw { color: #ffd93d; background: rgba(255, 217, 61, 0.1); }
+        .engine-info {
+            text-align: center;
+            font-size: 0.8rem;
+            color: #666;
+            margin-top: 15px;
+            border-top: 1px solid rgba(255,255,255,0.05);
+            padding-top: 15px;
+        }
+        .engine-info span { color: #ffd700; }
+        .move-history {
+            max-height: 100px;
+            overflow-y: auto;
+            font-size: 0.8rem;
+            color: #888;
+            text-align: center;
+            font-family: monospace;
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+            padding: 8px;
+            margin-top: 10px;
+        }
+        .move-history::-webkit-scrollbar { width: 4px; }
+        .move-history::-webkit-scrollbar-thumb { background: #f7971e; border-radius: 4px; }
+        @media (max-width: 480px) {
+            .container { padding: 15px; }
+            h1 { font-size: 1.5rem; }
+            .btn { padding: 8px 16px; font-size: 0.85rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>♟️ NegaMail-Chess</h1>
+        <div class="subtitle">
+            <span>Engine: <strong>NegaMail v1.0</strong></span>
+            <span style="margin: 0 8px;">·</span>
+            <span>by <a href="https://github.com/arafat01rahman" target="_blank">ARAFAT</a></span>
+        </div>
+        
+        <div id="board"></div>
+        
+        <div class="controls">
+            <button class="btn" onclick="resetGame()">🔄 New Game</button>
+            <button class="btn btn-secondary" onclick="flipBoard()">🔄 Flip Board</button>
+            <button class="btn btn-secondary" onclick="engineMove()">🤖 Engine Move</button>
+        </div>
+        
+        <div class="status" id="status">⚪ White to move</div>
+        <div class="move-history" id="moveHistory">Moves: —</div>
+        
+        <div class="engine-info">
+            ⚡ Server: Render.com · 24/7 Online · <span id="engineStatus">Ready</span>
+        </div>
+    </div>
+
+    <script>
+        // ============================================================
+        // Configuration
+        // ============================================================
+        const API_URL = '/move';
+        const ENGINE_DEPTH = 4;
+        
+        // ============================================================
+        // Game State
+        // ============================================================
+        let board = null;
+        let game = null;
+        let isEngineThinking = false;
+        let isFlipped = false;
+        let moveHistory = [];
+        
+        // ============================================================
+        // Initialize Board
+        // ============================================================
+        function initBoard() {
+            const config = {
+                draggable: true,
+                position: 'start',
+                showNotation: true,
+                onDragStart: onDragStart,
+                onDrop: onDrop,
+                onSnapEnd: onSnapEnd
+            };
+            board = Chessboard('board', config);
+            game = new Chess();
+            updateStatus();
+            updateMoveHistory();
+        }
+        
+        // ============================================================
+        // Drag & Drop Handlers
+        // ============================================================
+        function onDragStart(source, piece) {
+            if (isEngineThinking) return false;
+            if (game.game_over()) return false;
+            
+            // Only allow dragging own pieces
+            const color = game.turn() === 'w' ? 'w' : 'b';
+            if (piece.charAt(0) !== color) return false;
+        }
+        
+        function onDrop(source, target) {
+            // Try to make the move
+            const move = game.move({
+                from: source,
+                to: target,
+                promotion: 'q'
+            });
+            
+            if (move === null) return 'snapback';
+            
+            moveHistory.push(move.san);
+            board.position(game.fen());
+            updateStatus();
+            updateMoveHistory();
+            
+            // If game not over, engine moves
+            if (!game.game_over()) {
+                setTimeout(engineMove, 300);
+            }
+        }
+        
+        function onSnapEnd() {
+            board.position(game.fen());
+        }
+        
+        // ============================================================
+        // Engine Move
+        // ============================================================
+        async function engineMove() {
+            if (isEngineThinking) return;
+            if (game.game_over()) return;
+            
+            isEngineThinking = true;
+            const status = document.getElementById('status');
+            status.textContent = '🤔 Engine thinking...';
+            status.className = 'status thinking';
+            document.getElementById('engineStatus').textContent = 'Thinking...';
+            
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        fen: game.fen(),
+                        depth: ENGINE_DEPTH
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    status.textContent = '❌ ' + data.error;
+                    status.className = 'status';
+                    isEngineThinking = false;
+                    document.getElementById('engineStatus').textContent = 'Error';
+                    return;
+                }
+                
+                if (data.move) {
+                    const move = game.move(data.move);
+                    if (move) {
+                        moveHistory.push(move.san);
+                        board.position(game.fen());
+                        updateStatus();
+                        updateMoveHistory();
+                    }
+                }
+                
+                // Show score if available
+                if (data.score !== undefined) {
+                    const scoreStr = data.score > 0 ? '+' + data.score / 100 : data.score / 100;
+                    document.getElementById('engineStatus').textContent = 
+                        `Score: ${scoreStr}`;
+                }
+                
+            } catch (error) {
+                status.textContent = '❌ Connection error!';
+                status.className = 'status';
+                document.getElementById('engineStatus').textContent = 'Offline';
+            }
+            
+            isEngineThinking = false;
+            if (!game.game_over()) {
+                document.getElementById('engineStatus').textContent = 'Ready';
+            }
+        }
+        
+        // ============================================================
+        // UI Updates
+        // ============================================================
+        function updateStatus() {
+            const status = document.getElementById('status');
+            
+            if (game.in_checkmate()) {
+                const winner = game.turn() === 'w' ? '⚫ Black' : '⚪ White';
+                status.textContent = `🏆 Checkmate! ${winner} wins!`;
+                status.className = 'status checkmate';
+                document.getElementById('engineStatus').textContent = 'Game Over';
+                return;
+            }
+            
+            if (game.in_draw()) {
+                status.textContent = '🤝 Draw! (Stalemate or insufficient material)';
+                status.className = 'status draw';
+                document.getElementById('engineStatus').textContent = 'Game Over';
+                return;
+            }
+            
+            const turn = game.turn() === 'w' ? '⚪ White' : '⚫ Black';
+            const check = game.in_check() ? ' (Check!)' : '';
+            status.textContent = `${turn} to move${check}`;
+            status.className = 'status';
+        }
+        
+        function updateMoveHistory() {
+            const el = document.getElementById('moveHistory');
+            if (moveHistory.length === 0) {
+                el.textContent = 'Moves: —';
+                return;
+            }
+            
+            let html = 'Moves: ';
+            for (let i = 0; i < moveHistory.length; i++) {
+                if (i % 2 === 0) {
+                    html += `${Math.floor(i/2) + 1}. `;
+                }
+                html += `${moveHistory[i]} `;
+            }
+            el.textContent = html;
+            el.scrollTop = el.scrollHeight;
+        }
+        
+        // ============================================================
+        // Controls
+        // ============================================================
+        function resetGame() {
+            game = new Chess();
+            board.position('start');
+            moveHistory = [];
+            isEngineThinking = false;
+            updateStatus();
+            updateMoveHistory();
+            document.getElementById('engineStatus').textContent = 'Ready';
+        }
+        
+        function flipBoard() {
+            isFlipped = !isFlipped;
+            board.flip();
+        }
+        
+        // ============================================================
+        // Keyboard Shortcuts
+        // ============================================================
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'r' || e.key === 'R') resetGame();
+            if (e.key === 'f' || e.key === 'F') flipBoard();
+            if (e.key === ' ' || e.key === 'Space') {
+                e.preventDefault();
+                engineMove();
+            }
+        });
+        
+        // ============================================================
+        // Start
+        // ============================================================
+        document.addEventListener('DOMContentLoaded', initBoard);
+    </script>
+</body>
+</html>

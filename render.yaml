@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: negamail-chess
+    runtime: python
+    repo: https://github.com/arafat01rahman/NegaMail-Chess
+    branch: main
+    plan: free
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+    buildCommand: |
+      echo "🔧 Installing build tools..."
+      apt-get update
+      apt-get install -y g++ make
+      echo "🔨 Compiling chess engine..."
+      g++ -O2 -std=c++17 \
+        board.cpp \
+        evaluate.cpp \
+        search.cpp \
+        uci.cpp \
+        -o engine
+      echo "✅ Engine compiled!"
+      echo "📦 Installing Python dependencies..."
+      pip install -r requirements.txt
+      echo "✅ Ready to deploy!"
+    startCommand: gunicorn app:app
+    healthCheckPath: /health
