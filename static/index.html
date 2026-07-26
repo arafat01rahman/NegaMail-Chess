@@ -4,9 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>♟️ NegaMail-Chess - Play Online</title>
-    <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
-    <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.2/chess.min.js"></script>
+    
+    <!-- IMPORTANT: Load jQuery FIRST -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    
+    <!-- Then load chessboardjs (which requires jQuery) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
+    
+    <!-- Then chess.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/1.0.0-beta.4/chess.min.js"></script>
+    
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -25,7 +33,7 @@
             border-radius: 20px;
             padding: 30px;
             box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-            max-width: 600px;
+            max-width: 650px;
             width: 100%;
             border: 1px solid rgba(255,255,255,0.1);
         }
@@ -48,10 +56,14 @@
             color: #f7971e;
             text-decoration: none;
         }
-        #board {
+        #board-container {
             display: flex;
             justify-content: center;
             margin: 10px 0;
+        }
+        #board {
+            width: 400px;
+            max-width: 100%;
         }
         .controls {
             display: flex;
@@ -106,7 +118,7 @@
         }
         .engine-info span { color: #ffd700; }
         .move-history {
-            max-height: 100px;
+            max-height: 80px;
             overflow-y: auto;
             font-size: 0.8rem;
             color: #888;
@@ -123,6 +135,7 @@
             .container { padding: 15px; }
             h1 { font-size: 1.5rem; }
             .btn { padding: 8px 16px; font-size: 0.85rem; }
+            #board { width: 300px; }
         }
     </style>
 </head>
@@ -135,7 +148,9 @@
             <span>by <a href="https://github.com/arafat01rahman" target="_blank">ARAFAT</a></span>
         </div>
         
-        <div id="board"></div>
+        <div id="board-container">
+            <div id="board"></div>
+        </div>
         
         <div class="controls">
             <button class="btn" onclick="resetGame()">🔄 New Game</button>
@@ -171,18 +186,33 @@
         // Initialize Board
         // ============================================================
         function initBoard() {
-            const config = {
-                draggable: true,
-                position: 'start',
-                showNotation: true,
-                onDragStart: onDragStart,
-                onDrop: onDrop,
-                onSnapEnd: onSnapEnd
-            };
-            board = Chessboard('board', config);
-            game = new Chess();
-            updateStatus();
-            updateMoveHistory();
+            try {
+                // Make sure jQuery is loaded
+                if (typeof $ === 'undefined') {
+                    console.error('❌ jQuery not loaded!');
+                    document.getElementById('status').textContent = '❌ Error: jQuery not loaded';
+                    return;
+                }
+                
+                const config = {
+                    draggable: true,
+                    position: 'start',
+                    showNotation: true,
+                    onDragStart: onDragStart,
+                    onDrop: onDrop,
+                    onSnapEnd: onSnapEnd
+                };
+                
+                board = Chessboard('board', config);
+                game = new Chess();
+                updateStatus();
+                updateMoveHistory();
+                console.log('✅ Board initialized successfully!');
+                
+            } catch (error) {
+                console.error('❌ Error initializing board:', error);
+                document.getElementById('status').textContent = '❌ Error loading chess board. Please refresh.';
+            }
         }
         
         // ============================================================
@@ -191,35 +221,36 @@
         function onDragStart(source, piece) {
             if (isEngineThinking) return false;
             if (game.game_over()) return false;
-            
-            // Only allow dragging own pieces
-            const color = game.turn() === 'w' ? 'w' : 'b';
-            if (piece.charAt(0) !== color) return false;
+            if (game.turn() !== piece.charAt(0)) return false;
+            return true;
         }
         
         function onDrop(source, target) {
-            // Try to make the move
-            const move = game.move({
-                from: source,
-                to: target,
-                promotion: 'q'
-            });
-            
-            if (move === null) return 'snapback';
-            
-            moveHistory.push(move.san);
-            board.position(game.fen());
-            updateStatus();
-            updateMoveHistory();
-            
-            // If game not over, engine moves
-            if (!game.game_over()) {
-                setTimeout(engineMove, 300);
+            try {
+                const move = game.move({
+                    from: source,
+                    to: target,
+                    promotion: 'q'
+                });
+                
+                if (move === null) return 'snapback';
+                
+                moveHistory.push(move.san);
+                board.position(game.fen());
+                updateStatus();
+                updateMoveHistory();
+                
+                if (!game.game_over()) {
+                    setTimeout(engineMove, 300);
+                }
+            } catch (error) {
+                console.error('Move error:', error);
+                return 'snapback';
             }
         }
         
         function onSnapEnd() {
-            board.position(game.fen());
+            if (board) board.position(game.fen());
         }
         
         // ============================================================
@@ -228,6 +259,7 @@
         async function engineMove() {
             if (isEngineThinking) return;
             if (game.game_over()) return;
+            if (!board) return;
             
             isEngineThinking = true;
             const status = document.getElementById('status');
@@ -265,7 +297,6 @@
                     }
                 }
                 
-                // Show score if available
                 if (data.score !== undefined) {
                     const scoreStr = data.score > 0 ? '+' + data.score / 100 : data.score / 100;
                     document.getElementById('engineStatus').textContent = 
@@ -273,6 +304,7 @@
                 }
                 
             } catch (error) {
+                console.error('API Error:', error);
                 status.textContent = '❌ Connection error!';
                 status.className = 'status';
                 document.getElementById('engineStatus').textContent = 'Offline';
@@ -299,7 +331,7 @@
             }
             
             if (game.in_draw()) {
-                status.textContent = '🤝 Draw! (Stalemate or insufficient material)';
+                status.textContent = '🤝 Draw!';
                 status.className = 'status draw';
                 document.getElementById('engineStatus').textContent = 'Game Over';
                 return;
@@ -333,6 +365,7 @@
         // Controls
         // ============================================================
         function resetGame() {
+            if (!board) return;
             game = new Chess();
             board.position('start');
             moveHistory = [];
@@ -343,6 +376,7 @@
         }
         
         function flipBoard() {
+            if (!board) return;
             isFlipped = !isFlipped;
             board.flip();
         }
@@ -360,9 +394,23 @@
         });
         
         // ============================================================
-        // Start
+        // Start - Wait for all scripts to load
         // ============================================================
-        document.addEventListener('DOMContentLoaded', initBoard);
+        function waitForJQuery(callback) {
+            if (typeof $ !== 'undefined') {
+                callback();
+            } else {
+                setTimeout(function() { waitForJQuery(callback); }, 100);
+            }
+        }
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('📦 DOM loaded, waiting for jQuery...');
+            waitForJQuery(function() {
+                console.log('✅ jQuery loaded, initializing board...');
+                initBoard();
+            });
+        });
     </script>
 </body>
 </html>
