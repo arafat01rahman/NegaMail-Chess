@@ -294,6 +294,8 @@
         // ============================================================
         let game = null;
         let isEngineThinking = false;
+        let engineRequestInProgress = false;
+        let engineAutoTriggerEnabled = true;
         let isFlipped = true;
         let moveHistory = [];
         let selectedSquare = null;
@@ -426,17 +428,23 @@
         // ============================================================
         // Engine Move – Only when it's engine's turn
         // ============================================================
-        async function engineMove() {
-            if (isEngineThinking) return;
+        async function engineMove(manual = true) {
+            if (isEngineThinking || engineRequestInProgress) return;
             if (game.game_over()) return;
+            if (!manual && !engineAutoTriggerEnabled) return;
+
             // Only allow engine move if it's engine's turn
             if (game.turn() !== ENGINE_COLOR) {
-                // If it's human's turn, inform or do nothing
                 document.getElementById('status').textContent = '⏳ It\'s your turn!';
                 return;
             }
 
             isEngineThinking = true;
+            engineRequestInProgress = true;
+            if (!manual) {
+                engineAutoTriggerEnabled = false;
+            }
+
             const status = document.getElementById('status');
             status.textContent = '🤔 Engine thinking...';
             status.className = 'status thinking';
@@ -445,6 +453,7 @@
 
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), ENGINE_TIMEOUT_MS);
+            console.log('Engine request to', API_URL, 'with FEN', game.fen());
 
             try {
                 const response = await fetch(API_URL, {
@@ -465,7 +474,7 @@
                 const data = await response.json();
 
                 if (data.error) {
-                    status.textContent = '❌ ' + data.error;
+                    status.textContent = '(!!) ' + data.error;
                     status.className = 'status';
                     document.getElementById('engineStatus').textContent = 'Error';
                     return;
@@ -510,6 +519,8 @@
                 console.error('API Error:', error);
                 if (error.name === 'AbortError') {
                     status.textContent = '❌ Request timed out after 240s';
+                } else if (error.message === 'Failed to fetch') {
+                    status.textContent = '❌ Server unreachable or CORS/network failure';
                 } else {
                     status.textContent = `❌ Connection error: ${error.message}`;
                 }
@@ -518,6 +529,7 @@
             } finally {
                 clearTimeout(timeoutId);
                 isEngineThinking = false;
+                engineRequestInProgress = false;
                 document.getElementById('engineMoveBtn').disabled = false;
             }
         }
@@ -556,7 +568,7 @@
                     // If the engine hasn't started thinking, trigger it
                     // But we usually trigger after human move, so this is a safety net
                     if (!game.game_over()) {
-                        setTimeout(engineMove, 100);
+                        setTimeout(() => engineMove(false), 100);
                     }
                 }
             }
@@ -586,6 +598,8 @@
             selectedSquare = null;
             legalMoves = [];
             isEngineThinking = false;
+            engineRequestInProgress = false;
+            engineAutoTriggerEnabled = true;
             renderBoard();
             updateStatus();
             updateMoveHistory();
