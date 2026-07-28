@@ -5,9 +5,10 @@ No external engine – uses python-chess and a simple minimax AI.
 
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
+from werkzeug.exceptions import HTTPException
 import chess
 import time
-import os   
+import os
 
 app = Flask(__name__, static_folder='static')
 CORS(app)
@@ -173,9 +174,17 @@ def find_best_move(board, depth=3):
 # ---------- Flask endpoints ----------
 @app.route('/move', methods=['POST'])
 def get_move():
-    data = request.json
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid JSON body'}), 400
+
     fen = data.get('fen', chess.STARTING_FEN)
-    depth = data.get('depth', 3)  # allow client to set depth
+    depth = data.get('depth', 3)
+    try:
+        depth = int(depth)
+    except (TypeError, ValueError):
+        depth = 3
+    depth = max(1, min(depth, 4))  # keep engine search bounded
 
     try:
         board = chess.Board(fen)
@@ -222,6 +231,13 @@ def health():
 @app.errorhandler(404)
 def not_found(e):
     return jsonify({'error': 'Not found'}), 404
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    if isinstance(e, HTTPException):
+        return jsonify({'error': e.description}), e.code
+    app.logger.exception('Unhandled exception')
+    return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/')
 def home():

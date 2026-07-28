@@ -279,6 +279,7 @@
 
         const API_URL = '/move';
         const ENGINE_DEPTH = 3;
+        const ENGINE_TIMEOUT_MS = 240000; // 4 minutes
         const HUMAN_COLOR = 'w';    // Human plays White
         const ENGINE_COLOR = 'b';   // Engine plays Black
 
@@ -442,6 +443,9 @@
             document.getElementById('engineStatus').textContent = 'Thinking...';
             document.getElementById('engineMoveBtn').disabled = true;
 
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), ENGINE_TIMEOUT_MS);
+
             try {
                 const response = await fetch(API_URL, {
                     method: 'POST',
@@ -449,7 +453,8 @@
                     body: JSON.stringify({
                         fen: game.fen(),
                         depth: ENGINE_DEPTH
-                    })
+                    }),
+                    signal: controller.signal
                 });
 
                 if (!response.ok) {
@@ -503,10 +508,15 @@
 
             } catch (error) {
                 console.error('API Error:', error);
-                status.textContent = '❌ Connection error!';
+                if (error.name === 'AbortError') {
+                    status.textContent = '❌ Request timed out after 240s';
+                } else {
+                    status.textContent = `❌ Connection error: ${error.message}`;
+                }
                 status.className = 'status';
                 document.getElementById('engineStatus').textContent = 'Offline';
             } finally {
+                clearTimeout(timeoutId);
                 isEngineThinking = false;
                 document.getElementById('engineMoveBtn').disabled = false;
             }
